@@ -159,11 +159,12 @@ by reading. Keep doing that.
 
 ## Housekeeping noticed in the tree (decide and clean up)
 
-- **Duplicate scripts.** Loose copies of the toolchain and
-  `setup_lookdev_scene.py` also sit in `COMPARE\` root, next to the scenes,
-  alongside the canonical ones in `GitHub\tools\` and `GitHub\`. Two sources of
-  truth diverge. Decide which is canonical (the repo) and delete or symlink the
-  rest. `setup_generated.py` in `COMPARE\` is the **old name** — dead, remove it.
+- **Duplicate scripts — resolved.** The loose toolchain copies and
+  `setup_lookdev_scene.py` in `COMPARE\` root were byte-identical to the repo
+  versions and have been removed; the repo (`GitHub\tools\`, `GitHub\`) is the
+  single source of truth. The old `setup_generated.py` was archived to
+  `GitHub\_BACKUP_\_superseded\setup_generated_260717.py` (git-ignored) rather
+  than deleted. `CMD.txt` in `COMPARE\` now points at `GitHub\tools\`.
 - **`tools\` and `docs\MAINTAINING.md` are now public.** Earlier the intent was
   to keep the toolchain private. Publishing it is a fine choice — it makes the
   copyright argument transparent — but confirm it was intentional, not accidental.
