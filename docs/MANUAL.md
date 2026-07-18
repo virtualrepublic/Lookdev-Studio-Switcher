@@ -72,12 +72,15 @@ they can't drift apart.
 for. The renders show the difference; the words should say when to reach for
 which. -->
 
-| | | |
+<!-- TODO(images): config-macro/small/medium/large.png not shot yet.
+Add them to docs/images/ and restore the ![](images/config-*.png) cells below. -->
+
+| | Render | Use |
 |---|---|---|
-| **MACRO** | ![](images/config-macro.png) | |
-| **SMALL** | ![](images/config-small.png) | |
-| **MEDIUM** | ![](images/config-medium.png) | |
-| **LARGE** | ![](images/config-large.png) | |
+| **MACRO** | _screenshot TODO_ | |
+| **SMALL** | _screenshot TODO_ | |
+| **MEDIUM** | _screenshot TODO_ | |
+| **LARGE** | _screenshot TODO_ | |
 
 ---
 
