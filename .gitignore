@@ -50,3 +50,8 @@ venv/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# ----------------------------------------------------------------------------
+#  Private working notes (handoff / workflow) -- local only, never pushed
+# ----------------------------------------------------------------------------
+/_CLAUDE_/
