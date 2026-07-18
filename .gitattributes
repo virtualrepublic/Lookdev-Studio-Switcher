@@ -1,0 +1,14 @@
+# Normalise line endings: text files stored as LF in the repo,
+# checked out native on Windows. Keeps diffs clean across machines.
+* text=auto
+
+*.py   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+
+# Binary assets -- never touch these.
+*.png  binary
+*.webp binary
+*.exr  binary
+*.blend binary
+*.zip  binary

@@ -1,0 +1,52 @@
+# ----------------------------------------------------------------------------
+#  Blender scenes -- NEVER commit these.
+#  The Studio Lookdev scene is not ours to redistribute: users download it from
+#  the author. Keeping .blend files out of the repository is the whole point.
+# ----------------------------------------------------------------------------
+*.blend
+*.blend[0-9]
+*.blend[0-9][0-9]
+
+# ----------------------------------------------------------------------------
+#  Toolchain by-products
+# ----------------------------------------------------------------------------
+snap_*.json
+*_original.json
+*_modified.json
+diff.json
+compositor_diff.json
+setup_generated.py
+report*.txt
+/Report/
+
+# ----------------------------------------------------------------------------
+#  Local version backups (ZIP snapshots + working notes live here, never pushed)
+# ----------------------------------------------------------------------------
+/_BACKUP_/
+
+# ----------------------------------------------------------------------------
+#  Renders and caches
+# ----------------------------------------------------------------------------
+/Render/
+*.exr
+*.png
+*.mp4
+# ...but the documentation screenshots are part of the repo:
+!docs/images/**
+
+# ----------------------------------------------------------------------------
+#  Python
+# ----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ----------------------------------------------------------------------------
+#  Editors and OS
+# ----------------------------------------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
