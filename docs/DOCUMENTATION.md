@@ -127,6 +127,29 @@ The grouping deliberately includes hidden objects even though the measuring does
 not: a hidden part left out of the group would stand still while everything else
 turns.
 
+### Set Render Path
+
+Points `render.filepath` at a per-project output folder relative to your
+`.blend`:
+
+```
+//Render/<file name>/<file name>_
+```
+
+Both the folder and the image-name prefix come from the **saved `.blend`'s name**
+(`bpy.data.filepath`), not the scene name. `Explorer.blend` renders to
+`Render/Explorer/Explorer_0001.exr` — Blender appends the 4-digit frame number
+and the extension. Rename and re-save the file, press again, and the output
+folder follows.
+
+The path is relative (`//`), so the file has to be saved first. If it never has
+been, the button reports *"Save the .blend first"* and changes nothing — a `//`
+path has no meaning without a file to be relative to.
+
+This is an explicit, one-press choice. It overrides the conversion's neutral `//`
+default (see [Output and colour](#output-and-colour)); nothing sets this layout
+automatically.
+
 ---
 
 ## What the conversion changes

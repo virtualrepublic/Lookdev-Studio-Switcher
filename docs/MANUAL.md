@@ -14,6 +14,7 @@ A guide to using the Lookdev Switcher panel. For installation, see the
 - [Framing a model](#framing-a-model)
 - [Depth of field](#depth-of-field)
 - [Setting up your own model](#setting-up-your-own-model)
+- [Setting the render path](#setting-the-render-path)
 - [What the conversion changed](#what-the-conversion-changed)
 - [Troubleshooting](#troubleshooting)
 
@@ -38,13 +39,14 @@ Press `N` in the 3D viewport and pick the **Lookdev** tab.
 
 ![Panel with all controls labelled](images/panel-annotated.png)
 
-Three sections:
+Top to bottom:
 
 | Section | Purpose |
 |---|---|
 | Configuration buttons | Pick a scale: MACRO, SMALL, MEDIUM, LARGE, FRAME |
 | Depth of Field | Focus and aperture for all cameras |
 | Align & Link Model | Rig an imported model for the turntable |
+| Set Render Path | Point output at a per-project folder next to your file |
 
 ---
 
@@ -183,6 +185,25 @@ grouped and still turn — otherwise they'd stand still while the rest rotates.
 Press `FRAME` — or any of the four scales — and you're ready.
 
 ![The finished turntable](images/turntable-result.png)
+
+---
+
+## Setting the render path
+
+Before you render a turntable, one click tidies where the frames go.
+
+Press **Set Render Path** and your output moves to a folder named after your
+saved file, right next to it:
+
+`Render/<your file name>/<your file name>_0001.exr`
+
+Save `Explorer.blend`, press it, and the frames land in
+`Render/Explorer/Explorer_0001.exr` — Blender fills in the frame number and the
+`.exr` ending. Rename the file later and press again; the folder follows the new
+name, so every project keeps its own render folder without you typing a path.
+
+Because the path is relative to your `.blend`, the file has to be saved first. If
+it isn't, the button says so and leaves your output settings untouched.
 
 ---
 
