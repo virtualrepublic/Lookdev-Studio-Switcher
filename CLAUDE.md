@@ -76,7 +76,7 @@ instructions. `*.blend` is git-ignored so the scene cannot leak in.
 
 Author: Prof. Michael Klein <professor@virtualrepublic.org>.
 Licence: GPL-3.0-or-later (`bpy` add-ons are derivative works of Blender).
-Current release: `v1.0.0` (tag present).
+Current release: `v1.2.0` (tag present).
 
 ---
 
