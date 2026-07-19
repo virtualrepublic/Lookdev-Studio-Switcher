@@ -73,7 +73,8 @@ four, and switches to the matching camera. The active button stays pressed. Icon
 colours come from the collections' own colour tags, so the panel always matches
 your outliner.
 
-**FRAME** also frames: 150 mm, centred on your model, maximum crop. It measures
+**FRAME** also frames: 150 mm, centred on your model, with a safe-action margin —
+the silhouette fills about 90 % of the frame, never the very edge. It measures
 at frames 0 *and* 75 — a car is narrow head-on and wide side-on, and fitting only
 one would clip the other as the turntable turns.
 
@@ -91,7 +92,8 @@ Saved with your file.
 
 ### Align & Link Model
 
-Import a model, drop it into the `MODEL` collection, press the button once.
+Import a model — with **Auto-collect to MODEL** on (the default) it drops into the
+`MODEL` collection by itself — then press the button once.
 
 It measures your model, grounds an empty at its floor centre, groups everything
 under it, moves it onto the turntable rig and binds it. Your model now spins,

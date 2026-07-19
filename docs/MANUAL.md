@@ -87,8 +87,9 @@ Add them to docs/images/ and restore the ![](images/config-*.png) cells below. -
 ## Framing a model
 
 `FRAME` does everything the other buttons do, and then fits the camera to your
-model: 150 mm, centred, filling as much of the frame as possible without
-cropping.
+model: 150 mm, centred, filling the frame up to a safe-action margin — about
+90 %, so the silhouette keeps a small border and never touches the edge as it
+turns.
 
 ![Before and after pressing FRAME](images/frame-before-after.png)
 
@@ -146,8 +147,10 @@ The whole point: bring in a model, get a turntable.
 
 ### 1. Import
 
-Import your model and put it in the **`MODEL`** collection. Sub-collections are
-fine — the tool looks inside them.
+Import your model. With **Auto-collect to MODEL** on (the default), it lands in
+the **`MODEL`** collection by itself — no manual drag. Sub-collections are fine;
+the tool looks inside them. Turn the toggle off in the panel if you would rather
+place things yourself.
 
 ![A model in the MODEL collection](images/model-imported.png)
 

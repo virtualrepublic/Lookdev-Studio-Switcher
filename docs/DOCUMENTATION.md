@@ -70,7 +70,10 @@ testing.
 back the camera must sit for that corner to still fit, horizontally and
 vertically, and takes the maximum across all of them. The limiting axis — width
 *or* height, depending on the bounding box aspect against the render aspect —
-touches the frame edge exactly. Nothing is cropped.
+would touch the frame edge exactly. A `FRAME_FILL` factor (default `0.9`) then
+pulls the camera back so the model fills about 90 % of the frame instead — a
+safe-action margin, so the silhouette never touches the edge as the turntable
+turns. Set `FRAME_FILL = 1.0` for maximum crop.
 
 The maths accounts for render resolution, pixel aspect, and the camera's
 `sensor_fit` (`AUTO`, `HORIZONTAL`, `VERTICAL`).
@@ -92,8 +95,15 @@ cameras, so panel and cameras cannot drift apart.
 
 ### Align & Link Model
 
-Prepares an imported model for the turntable. Put the model into `MODEL` and
-press the button.
+Prepares an imported model for the turntable. Import it — **Auto-collect to
+MODEL** (panel toggle, on by default) moves new geometry into `MODEL` for you —
+then press the button.
+
+**Auto-collect to MODEL.** A lightweight background check watches for objects
+that appear (an import, or *Add*) and relinks new geometry and empties into
+`MODEL`, so an import lands on the turntable without a manual drag. Cameras,
+lights and the `LINKED_ROTATION` empty are left where they are. It runs only in
+Object Mode; toggle it off to place things by hand.
 
 1. **Measure** — bounding box of every *visible* mesh in `MODEL`,
    sub-collections included. Hidden parts are ignored and can't pull the centre

@@ -1,5 +1,5 @@
 # ============================================================================
-#  LOOKDEV SWITCHER  v1.0
+#  LOOKDEV SWITCHER  v1.1
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -52,7 +52,7 @@
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -84,6 +84,10 @@ DOF_DEPTH_MAX    = 2.0
 # The models rotate on the turntable, so the visible extent is measured at
 # these frames and the framing fits the union of all of them.
 FRAME_CHECK_FRAMES = (0, 75)
+# How much of the frame the model fills. 1.0 = maximum crop (the silhouette
+# touches the frame edge); below 1.0 dollies the camera back and leaves a
+# margin all around -- a "safe action" border. 0.9 = 5 % on each side.
+FRAME_FILL = 0.9
 
 # All collections that switch each other off
 ALL_COLLECTIONS = COLLECTIONS + [FRAME_COLLECTION]
@@ -95,6 +99,64 @@ MODEL_COLLECTION = "MODEL"            # collection holding the imported models
 EMPTY_NAME       = "LINKED_ROTATION"  # name of the created empty
 ROTATION_TARGET  = "ROTATION_LINK"    # target object for the Child Of constraint
 GEO_TYPES = {'MESH', 'CURVE', 'SURFACE', 'FONT', 'META'}
+
+# --- Auto-collect imported objects into MODEL --------------------------------
+# A lightweight timer watches for objects that appear (an import, or Add) and
+# moves them into MODEL so a freshly imported model lands on the turntable
+# without a manual drag. Only geometry and empties are moved; cameras, lights
+# and the tool's own rotation empty are left where they are.
+AUTO_MODEL_POLL   = 0.5               # seconds between checks for new objects
+_seen_object_names = set()            # object names known at the previous check
+
+
+def _current_object_names():
+    return {o.name for o in bpy.data.objects}
+
+
+def auto_collect_into_model():
+    """Relink objects that appeared since the last check into MODEL.
+
+    Returns the list of names that were moved. Objects already in MODEL, and
+    non-geometry (cameras, lights) are ignored, as is the rotation empty.
+    """
+    global _seen_object_names
+    model_coll = bpy.data.collections.get(MODEL_COLLECTION)
+    current = _current_object_names()
+    new_names = current - _seen_object_names
+    moved = []
+    if model_coll is not None and new_names:
+        model_objs = set(model_coll.all_objects)
+        for name in sorted(new_names):
+            obj = bpy.data.objects.get(name)
+            if obj is None or obj.name == EMPTY_NAME:
+                continue
+            if obj.type not in GEO_TYPES and obj.type != 'EMPTY':
+                continue
+            if obj in model_objs:
+                continue
+            for coll in list(obj.users_collection):
+                coll.objects.unlink(obj)
+            model_coll.objects.link(obj)
+            moved.append(name)
+    _seen_object_names = current
+    return moved
+
+
+def _auto_model_timer():
+    """Timer callback: collect new objects when the panel toggle is on.
+
+    Restricted to OBJECT mode so nothing is relinked mid edit. When the toggle
+    is off the baseline is still refreshed, so switching it on later only
+    affects objects imported from that point on, not everything already there.
+    """
+    global _seen_object_names
+    scene = getattr(bpy.context, "scene", None)
+    on = bool(getattr(scene, "lookdev_auto_model", False)) if scene else False
+    if on and getattr(bpy.context, "mode", 'OBJECT') == 'OBJECT':
+        auto_collect_into_model()
+    else:
+        _seen_object_names = _current_object_names()
+    return AUTO_MODEL_POLL
 
 
 def find_layer_collection(layer_coll, name):
@@ -283,11 +345,13 @@ def camera_sensor_tangents(cam_data, scene):
     return (sensor_x * 0.5) / cam_data.lens, (sensor_y * 0.5) / cam_data.lens
 
 
-def fit_camera_to_points(cam_obj, points, scene):
+def fit_camera_to_points(cam_obj, points, scene, fill=1.0):
     """Keep the camera rotation, move it so all points are centered and fill the frame.
 
     The limiting axis decides the distance, so the models are framed either to
-    width or to height depending on the bounding box aspect ratio.
+    width or to height depending on the bounding box aspect ratio. ``fill`` is
+    the fraction of the frame the model should occupy: 1.0 is maximum crop,
+    below 1.0 pulls the camera back and leaves a safe-action margin around it.
     """
     rot = cam_obj.matrix_world.to_3x3().normalized()
     rot_inv = rot.inverted()
@@ -299,6 +363,10 @@ def fit_camera_to_points(cam_obj, points, scene):
     cy = (min(ys) + max(ys)) / 2.0            # centered vertically
 
     tan_x, tan_y = camera_sensor_tangents(cam_obj.data, scene)
+    # Shrink the effective field of view so the model fills only ``fill`` of it;
+    # the camera then sits further back and a margin appears around the subject.
+    tan_x *= fill
+    tan_y *= fill
 
     # The camera looks along its local -Z. For every corner the camera must be at
     # least this far back so the corner still fits; the maximum wins.
@@ -377,9 +445,10 @@ class SCENE_OT_frame_model(bpy.types.Operator):
             scene.frame_set(original_frame)
             return {'CANCELLED'}
 
-        # Fit with a deterministic camera orientation (first check frame)
+        # Fit with a deterministic camera orientation (first check frame),
+        # leaving a safe-action margin so the silhouette does not touch the edge.
         scene.frame_set(FRAME_CHECK_FRAMES[0])
-        fit_camera_to_points(cam_obj, corners, scene)
+        fit_camera_to_points(cam_obj, corners, scene, FRAME_FILL)
         context.view_layer.update()
 
         scene.frame_set(original_frame)       # restore the original frame
@@ -499,6 +568,8 @@ class VIEW3D_PT_lookdev_switcher(bpy.types.Panel):
         col.prop(context.scene, "lookdev_dof_depth", slider=True)
 
         layout.separator()
+        layout.prop(context.scene, "lookdev_auto_model", toggle=True,
+                    icon='IMPORT')   # auto-move imports into MODEL
         layout.operator("scene.link_model", text="Align & Link Model",
                         icon=collection_icon(MODEL_COLLECTION))   # neutral, matching MODEL
 
@@ -540,6 +611,18 @@ def register():
         soft_max=DOF_DEPTH_MAX,
         update=_update_dof_settings,
     )
+    bpy.types.Scene.lookdev_auto_model = bpy.props.BoolProperty(
+        name="Auto-collect to MODEL",
+        description=("Automatically move newly imported or added geometry into "
+                     "'%s' so it lands on the turntable" % MODEL_COLLECTION),
+        default=True,
+    )
+
+    # Start watching for new objects (imports) to pull into MODEL.
+    global _seen_object_names
+    _seen_object_names = _current_object_names()
+    if not bpy.app.timers.is_registered(_auto_model_timer):
+        bpy.app.timers.register(_auto_model_timer, first_interval=AUTO_MODEL_POLL)
 
     apply_color_tags()      # set outliner colors once on load
     # Apply the SAVED panel values to the cameras (do not force fixed defaults,
@@ -552,6 +635,9 @@ def register():
 
 
 def unregister():
+    if bpy.app.timers.is_registered(_auto_model_timer):
+        bpy.app.timers.unregister(_auto_model_timer)
+    del bpy.types.Scene.lookdev_auto_model
     del bpy.types.Scene.lookdev_dof_depth
     del bpy.types.Scene.lookdev_fstop
     del bpy.types.Scene.lookdev_dof

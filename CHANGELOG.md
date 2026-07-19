@@ -17,7 +17,18 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ## [Unreleased]
 
-_Work in progress lands here until the next tag._
+### Added
+- **Auto-collect to MODEL** — newly imported or added geometry is moved into the
+  `MODEL` collection automatically, so an import lands on the turntable without a
+  manual drag. Cameras, lights and the rotation empty are left alone; runs in
+  Object Mode only, and a panel toggle (on by default) turns it off.
+
+### Changed
+- **FRAME** now leaves a safe-action margin (`FRAME_FILL`, default `0.9`): the
+  model fills ~90 % of the frame instead of touching the edge, so the silhouette
+  keeps a border as the turntable turns. Set `FRAME_FILL = 1.0` for the previous
+  maximum-crop behaviour.
+- Addon version bumped to 1.1.0.
 
 ---
 
