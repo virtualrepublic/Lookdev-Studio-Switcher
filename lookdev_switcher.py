@@ -1,5 +1,5 @@
 # ============================================================================
-#  LOOKDEV SWITCHER  v1.1
+#  LOOKDEV SWITCHER  v1.2
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -52,7 +52,7 @@
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 1, 0),
+    "version": (1, 2, 0),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -93,6 +93,16 @@ FRAME_FILL = 0.9
 ALL_COLLECTIONS = COLLECTIONS + [FRAME_COLLECTION]
 # All cameras driven by the DOF / F-Stop settings
 ALL_CAMERAS = [c[1] for c in CONFIGS] + [FRAME_CAMERA]
+
+# --- Set Render Path button ---------------------------------------------------
+# The output path is set relative to the .blend ("//") so renders always land
+# next to the file, never in a machine-specific absolute folder. The folder and
+# image prefix follow the SAVED .blend's name (not the scene name). Layout:
+#     //Render/<blend file name>/<blend file name>_
+# Blender appends the frame number (4 digits) and the extension, e.g. for
+# MyProject.blend:
+#     Render/MyProject/MyProject_0001.exr
+RENDER_SUBDIR = "Render"             # top-level output folder next to the .blend
 
 # --- Align & Link Model button ------------------------------------------------
 MODEL_COLLECTION = "MODEL"            # collection holding the imported models
@@ -534,6 +544,36 @@ class SCENE_OT_link_model(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class SCENE_OT_set_render_path(bpy.types.Operator):
+    bl_idname = "scene.set_render_path"
+    bl_label = "Set Render Path"
+    bl_description = ("Set the output path relative to this .blend to "
+                      "//%s/<blend name>/<blend name>_ so frames render into a "
+                      "folder named after the saved project file, e.g. "
+                      "%s/MyProject/MyProject_0001.exr"
+                      % (RENDER_SUBDIR, RENDER_SUBDIR))
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        # Folder and image prefix follow the SAVED .blend's name, not the scene
+        # name. A "//" output path needs a saved file anyway, so require one and
+        # report clearly rather than writing next to an unnamed file.
+        blend_path = bpy.data.filepath
+        if not blend_path:
+            self.report({'ERROR'}, "Save the .blend first -- the render path "
+                                   "follows the project file name")
+            return {'CANCELLED'}
+        name = bpy.path.display_name_from_filepath(blend_path)  # .blend name, no extension
+        # "//" keeps the path relative to the .blend; forward slashes are
+        # accepted by Blender on every OS. The trailing "_" is the image name
+        # prefix -- Blender appends the 4-digit frame number and the extension.
+        path = "//%s/%s/%s_" % (RENDER_SUBDIR, name, name)
+        scene.render.filepath = path
+        self.report({'INFO'}, "Render path set to '%s' (+ frame number)" % path)
+        return {'FINISHED'}
+
+
 class VIEW3D_PT_lookdev_switcher(bpy.types.Panel):
     bl_label = "Lookdev Switcher"
     bl_space_type = 'VIEW_3D'
@@ -573,9 +613,13 @@ class VIEW3D_PT_lookdev_switcher(bpy.types.Panel):
         layout.operator("scene.link_model", text="Align & Link Model",
                         icon=collection_icon(MODEL_COLLECTION))   # neutral, matching MODEL
 
+        layout.separator()
+        layout.operator("scene.set_render_path", text="Set Render Path",
+                        icon='OUTPUT')   # //Render/<scene>/<scene>_
+
 
 classes = (SCENE_OT_set_config, SCENE_OT_frame_model, SCENE_OT_link_model,
-           VIEW3D_PT_lookdev_switcher)
+           SCENE_OT_set_render_path, VIEW3D_PT_lookdev_switcher)
 
 
 def register():

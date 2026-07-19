@@ -21,6 +21,23 @@ _Work in progress lands here until the next tag._
 
 ---
 
+## [1.2.0] — 2026-07-20
+
+### Added
+- **Set Render Path** — a panel button that points the output at
+  `//Render/<blend name>/<blend name>_`, i.e. a per-project folder next to the
+  saved `.blend`, with the file name as the image prefix (Blender appends the
+  4-digit frame number and extension, e.g. `MyProject/MyProject_0001.exr`). The
+  folder and prefix follow the **saved project file name**, not the scene name;
+  if the file has never been saved the button reports that and changes nothing,
+  since a `//` relative path needs a saved file anyway.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+Existing users get the button by re-running the current `setup_lookdev_scene.py`
+(or reloading the panel).
+
+---
+
 ## [1.1.0] — 2026-07-19
 
 ### Added
@@ -106,7 +123,8 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.0...v1.0.1
