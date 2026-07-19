@@ -17,6 +17,12 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ## [Unreleased]
 
+_Work in progress lands here until the next tag._
+
+---
+
+## [1.1.0] — 2026-07-19
+
 ### Added
 - **Auto-collect to MODEL** — newly imported or added geometry is moved into the
   `MODEL` collection automatically, so an import lands on the turntable without a
@@ -100,7 +106,8 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/releases/tag/v1.0.0
