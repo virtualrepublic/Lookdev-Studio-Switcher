@@ -99,6 +99,22 @@ It measures your model, grounds an empty at its floor centre, groups everything
 under it, moves it onto the turntable rig and binds it. Your model now spins,
 centred, around its own axis.
 
+### Set Render Path
+
+One click points your render output at a tidy per-project folder next to your
+`.blend`:
+
+`//Render/<file name>/<file name>_`
+
+Both the folder and the image name follow your **saved file's name**. Open
+`Explorer.blend`, press it, and frames render to
+`Render/Explorer/Explorer_0001.exr` — Blender appends the frame number and the
+extension. Save under a new name and press again, and everything moves into a
+folder that matches.
+
+Save the file first: the path is relative to the `.blend`, so there has to be
+one. If there isn't, the button says so and changes nothing.
+
 ---
 
 ## Documentation
