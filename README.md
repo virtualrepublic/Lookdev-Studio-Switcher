@@ -1,4 +1,4 @@
-# Lookdev Studio Switcher
+# Lookdev Studio Switcher — Blender 5.2+
 
 Turns a free **Studio Lookdev** scene into a one-click turntable workstation:
 switch between five framing configurations, control depth of field, and rig any
