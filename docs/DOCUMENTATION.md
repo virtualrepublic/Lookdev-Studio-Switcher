@@ -182,14 +182,16 @@ scene — that is the point.
 
 | Setting | Before | After |
 |---|---|---|
-| Samples | 128 | 1024 |
+| Samples | 128 | 512 |
 | Adaptive sampling | off | on, noise threshold 0.01 |
-| Denoising | off | on (viewport too) |
+| Denoising | off | on (OpenImageDenoise, viewport too) |
 | Max / diffuse / glossy / transmission / transparent bounces | 4 | 32 |
 | Volume bounces | 0 | 32 |
 | Light tree | off | on |
 | Caustics, reflective and refractive | off | on |
 | Transparent glass on transparent film | off | on |
+| Compositor device | CPU | GPU |
+| Persistent data | off | on |
 
 **Not carried over:** GPU denoising. That is a statement about my machine, not
 about the scene — switch it on yourself under *Render Properties → Sampling →
@@ -206,7 +208,6 @@ Denoise* if your card supports it.
 | View transform | Filmic | ACES 2.0 |
 | Look | None | ACES 2.0 - Reference Gamut Compression |
 | Film | opaque | transparent |
-| Resolution | 100 % | 200 % |
 | Units | metres | centimetres |
 | Output path | — | `//` |
 
@@ -280,7 +281,7 @@ Compositor via *Add → Group → Film Grain*, then run the script again. Everyt
 else was applied regardless.
 
 **Renders are slow now.**
-Sampling is at 1024 with 32 bounces — lookdev quality. Lower *Render Properties →
+Sampling is at 512 with 32 bounces — lookdev quality. Lower *Render Properties →
 Sampling → Render → Max Samples* if you only need a preview.
 
 **My renders are EXR, not PNG.**

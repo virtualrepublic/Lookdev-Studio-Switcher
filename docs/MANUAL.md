@@ -221,7 +221,7 @@ Surface modifier, so they hold up under the closer camera scales.
 
 ### Render settings
 
-The scene is set up for lookdev quality: **1024 samples**, all bounces at 32,
+The scene is set up for lookdev quality: **512 samples**, all bounces at 32,
 adaptive sampling with a 0.01 noise threshold, denoising on, light tree and
 caustics on. Renders take longer than the original scene — that is deliberate.
 
@@ -230,7 +230,7 @@ graphics card, not on the scene. Turn it on yourself if you have one.
 
 ### Output and colour
 
-Transparent film, 200 % resolution, centimetres, and ACES 2.0 colour management
+Transparent film, centimetres, and ACES 2.0 colour management
 with reference gamut compression. Renders are written as **multi-layer EXR**
 (Float Half, DWAB) in ACEScg, next to your own `.blend` file.
 
@@ -267,7 +267,7 @@ Colours come from the outliner. Change the collection's colour tag there and the
 button follows.
 
 **Renders are slow now.**
-1024 samples with 32 bounces — lookdev quality. Lower *Render Properties →
+512 samples with 32 bounces — lookdev quality. Lower *Render Properties →
 Sampling → Render → Max Samples* if you only need a preview.
 
 **My renders are EXR, not PNG.**

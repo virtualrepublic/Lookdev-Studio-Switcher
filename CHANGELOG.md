@@ -21,6 +21,28 @@ _Work in progress lands here until the next tag._
 
 ---
 
+## [1.0.2] — 2026-07-19
+
+Render-settings update, regenerated from the reworked scene.
+
+> **Existing users must reconvert:** run the new `setup_lookdev_scene.py` on a
+> fresh copy of the original scene to pick these up. Re-running it on an
+> already-converted file also applies the changed values.
+
+### Changed
+- Render sampling lowered from **1024 to 512** samples (documentation updated
+  across README, MANUAL and DOCUMENTATION).
+- Resolution is no longer forced to 200 % — it stays at the scene default
+  (100 %); the "what the conversion changes" table drops that row.
+
+### Added
+- Viewport denoiser set to **OpenImageDenoise** (`cycles.preview_denoiser`).
+- **GPU compositor** (`render.compositor_device = 'GPU'`).
+- **Persistent data** enabled (`render.use_persistent_data = True`) — faster
+  re-renders at the cost of memory.
+
+---
+
 ## [1.0.1] — 2026-07-18
 
 Housekeeping release — no functional change to the tool or the installer.
@@ -67,6 +89,7 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/releases/tag/v1.0.0

@@ -1350,11 +1350,19 @@ def migrate(scene=None):
     except (AttributeError, TypeError) as exc:
         log('!! skipped cycles.max_bounces: ' + str(exc))
 
+    # cycles.preview_denoiser
+    try:
+        if scene.cycles.preview_denoiser != 'OPENIMAGEDENOISE':
+            scene.cycles.preview_denoiser = 'OPENIMAGEDENOISE'
+            log('cycles.preview_denoiser -> OPENIMAGEDENOISE')
+    except (AttributeError, TypeError) as exc:
+        log('!! skipped cycles.preview_denoiser: ' + str(exc))
+
     # cycles.samples
     try:
-        if scene.cycles.samples != 1024:
-            scene.cycles.samples = 1024
-            log('cycles.samples -> 1024')
+        if scene.cycles.samples != 512:
+            scene.cycles.samples = 512
+            log('cycles.samples -> 512')
     except (AttributeError, TypeError) as exc:
         log('!! skipped cycles.samples: ' + str(exc))
 
@@ -1414,6 +1422,14 @@ def migrate(scene=None):
     except (AttributeError, TypeError) as exc:
         log('!! skipped cycles.volume_bounces: ' + str(exc))
 
+    # render.compositor_device
+    try:
+        if scene.render.compositor_device != 'GPU':
+            scene.render.compositor_device = 'GPU'
+            log('render.compositor_device -> GPU')
+    except (AttributeError, TypeError) as exc:
+        log('!! skipped render.compositor_device: ' + str(exc))
+
     # render.filepath
     try:
         if scene.render.filepath != '//':
@@ -1470,13 +1486,13 @@ def migrate(scene=None):
     except (AttributeError, TypeError) as exc:
         log('!! skipped render.image_settings.media_type: ' + str(exc))
 
-    # render.resolution_percentage
+    # render.use_persistent_data
     try:
-        if scene.render.resolution_percentage != 200:
-            scene.render.resolution_percentage = 200
-            log('render.resolution_percentage -> 200')
+        if scene.render.use_persistent_data != True:
+            scene.render.use_persistent_data = True
+            log('render.use_persistent_data -> True')
     except (AttributeError, TypeError) as exc:
-        log('!! skipped render.resolution_percentage: ' + str(exc))
+        log('!! skipped render.use_persistent_data: ' + str(exc))
 
     # unit_settings.length_unit
     try:

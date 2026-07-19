@@ -53,7 +53,7 @@ verifies it's looking at the right scene first and refuses to touch anything
 else.
 
 It does change your render settings, and you will notice: sampling goes from 128
-to **1024**, and renders come out as **multi-layer EXR** instead of PNG. That is
+to **512**, and renders come out as **multi-layer EXR** instead of PNG. That is
 lookdev quality on purpose. The full list is in the
 [reference](docs/DOCUMENTATION.md#what-the-conversion-changes).
 
