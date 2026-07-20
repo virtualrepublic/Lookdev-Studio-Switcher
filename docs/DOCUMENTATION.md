@@ -99,11 +99,20 @@ Prepares an imported model for the turntable. Import it — **Auto-collect to
 MODEL** (panel toggle, on by default) moves new geometry into `MODEL` for you —
 then press the button.
 
-**Auto-collect to MODEL.** A lightweight background check watches for objects
-that appear (an import, or *Add*) and relinks new geometry and empties into
-`MODEL`, so an import lands on the turntable without a manual drag. Cameras,
-lights and the `LINKED_ROTATION` empty are left where they are. It runs only in
-Object Mode; toggle it off to place things by hand.
+**Auto-collect to MODEL.** A lightweight background check watches for things
+that appear (an import, or *Add*) and moves them into `MODEL`, so an import lands
+on the turntable without a manual drag. It runs only in Object Mode; toggle it
+off to place things by hand.
+
+- An imported **collection** is re-parented under `MODEL` as a whole — the
+  collection keeps its objects and sub-collections, rather than being emptied
+  out. A collection nested inside another imported collection rides along with
+  its parent.
+- **Loose objects** imported without a collection (new geometry and empties) are
+  linked into `MODEL` directly.
+
+Cameras, lights and the `LINKED_ROTATION` empty are left where they are, as are
+collections that are only instanced and the rig's own collections.
 
 1. **Measure** — bounding box of every *visible* mesh in `MODEL`,
    sub-collections included. Hidden parts are ignored and can't pull the centre

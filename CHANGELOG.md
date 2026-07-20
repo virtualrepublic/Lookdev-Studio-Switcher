@@ -21,6 +21,22 @@ _Work in progress lands here until the next tag._
 
 ---
 
+## [1.2.1] — 2026-07-20
+
+### Fixed
+- **Auto-collect to MODEL** now handles an imported **collection** correctly.
+  Previously it pulled the individual objects out into `MODEL` and left the
+  imported collection behind, empty. It now re-parents the whole collection
+  under `MODEL` — the collection and its contents move together. Loose objects
+  imported without a collection are still linked into `MODEL` as before, and a
+  collection nested inside another imported collection rides along with its
+  parent rather than being flattened. Collections that are only instanced, and
+  the rig's own collections, are left untouched.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+
+---
+
 ## [1.2.0] — 2026-07-20
 
 ### Added
@@ -123,7 +139,8 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.1...v1.0.2

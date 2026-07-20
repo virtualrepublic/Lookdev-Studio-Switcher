@@ -191,7 +191,7 @@ TOOL_SOURCE = r'''# ============================================================
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 2, 0),
+    "version": (1, 2, 1),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -250,32 +250,112 @@ ROTATION_TARGET  = "ROTATION_LINK"    # target object for the Child Of constrain
 GEO_TYPES = {'MESH', 'CURVE', 'SURFACE', 'FONT', 'META'}
 
 # --- Auto-collect imported objects into MODEL --------------------------------
-# A lightweight timer watches for objects that appear (an import, or Add) and
+# A lightweight timer watches for things that appear (an import, or Add) and
 # moves them into MODEL so a freshly imported model lands on the turntable
-# without a manual drag. Only geometry and empties are moved; cameras, lights
-# and the tool's own rotation empty are left where they are.
-AUTO_MODEL_POLL   = 0.5               # seconds between checks for new objects
+# without a manual drag.
+#
+# Two cases, handled differently:
+#   * a whole imported COLLECTION is re-parented under MODEL as a child -- the
+#     collection and its contents move together (earlier this stripped the
+#     objects out and left the imported collection behind, empty);
+#   * loose OBJECTS imported without a collection are linked into MODEL directly.
+# Only geometry and empties are moved as loose objects; cameras, lights and the
+# tool's own rotation empty are left where they are.
+AUTO_MODEL_POLL   = 0.5               # seconds between checks for new datablocks
 _seen_object_names = set()            # object names known at the previous check
+_seen_collection_names = set()        # collection names known at the previous check
+
+# Collections the auto-collect must never pull into MODEL: the lookdev rig's own
+# collections, MODEL itself, and RENDER. (They exist at load time, so they are
+# never "new" anyway -- this is a belt-and-braces guard.)
+PROTECTED_COLLECTIONS = set(ALL_COLLECTIONS) | {MODEL_COLLECTION, "RENDER"}
 
 
 def _current_object_names():
     return {o.name for o in bpy.data.objects}
 
 
-def auto_collect_into_model():
-    """Relink objects that appeared since the last check into MODEL.
+def _current_collection_names():
+    return {c.name for c in bpy.data.collections}
 
-    Returns the list of names that were moved. Objects already in MODEL, and
-    non-geometry (cameras, lights) are ignored, as is the rotation empty.
+
+def _collection_parents(coll):
+    """Return the collections (and scene master collections) that link `coll`.
+
+    Blender has no `collection.parent`; a collection's parents are whoever lists
+    it in their `children`. The scene master collections count too, so a
+    freshly appended collection linked at the scene root is found here.
     """
-    global _seen_object_names
+    parents = []
+    for parent in bpy.data.collections:
+        if parent != coll and parent.children.get(coll.name) is not None:
+            parents.append(parent)
+    for scene in bpy.data.scenes:
+        if scene.collection.children.get(coll.name) is not None:
+            parents.append(scene.collection)
+    return parents
+
+
+def _relink_collection_into_model(coll, model_coll):
+    """Link `coll` under MODEL and unlink it from its previous parents.
+
+    Moves the whole collection (with its objects and sub-collections) rather
+    than emptying it. Returns True if it ended up under MODEL.
+    """
+    parents = _collection_parents(coll)
+    if model_coll.children.get(coll.name) is None:
+        try:
+            model_coll.children.link(coll)
+        except RuntimeError:
+            return False               # would create a cycle -- leave it be
+    for parent in parents:
+        if parent != model_coll:
+            try:
+                parent.children.unlink(coll)
+            except RuntimeError:
+                pass
+    return True
+
+
+def auto_collect_into_model():
+    """Move things that appeared since the last check into MODEL.
+
+    A whole imported collection is re-parented under MODEL (contents and all);
+    loose imported objects are linked into MODEL individually. Returns the list
+    of names that were moved (collections shown with a trailing '/'). Objects
+    already in MODEL, non-geometry (cameras, lights) and the rotation empty are
+    left alone.
+    """
+    global _seen_object_names, _seen_collection_names
     model_coll = bpy.data.collections.get(MODEL_COLLECTION)
-    current = _current_object_names()
-    new_names = current - _seen_object_names
+    current_objs = _current_object_names()
+    current_colls = _current_collection_names()
     moved = []
-    if model_coll is not None and new_names:
+    if model_coll is not None:
+        # 1. Whole imported collections -> re-parent the collection under MODEL,
+        #    so it keeps its objects instead of being emptied out.
+        new_coll_names = current_colls - _seen_collection_names
+        new_colls = [bpy.data.collections.get(n) for n in sorted(new_coll_names)]
+        new_colls = [c for c in new_colls if c is not None]
+        new_set = set(new_colls)
+        for coll in new_colls:
+            if coll == model_coll or coll.name in PROTECTED_COLLECTIONS:
+                continue
+            if model_coll.children.get(coll.name) is not None:
+                continue                       # already under MODEL
+            parents = _collection_parents(coll)
+            if not parents:
+                continue                       # not in the scene tree (e.g. only instanced)
+            if any(p in new_set for p in parents):
+                continue                       # nested inside another new collection -- moves with it
+            if _relink_collection_into_model(coll, model_coll):
+                moved.append(coll.name + "/")
+
+        # 2. Loose objects imported without a collection -> link into MODEL.
+        #    Objects that arrived inside a collection moved above are already in
+        #    MODEL now, so they fall through the `in model_objs` check.
         model_objs = set(model_coll.all_objects)
-        for name in sorted(new_names):
+        for name in sorted(current_objs - _seen_object_names):
             obj = bpy.data.objects.get(name)
             if obj is None or obj.name == EMPTY_NAME:
                 continue
@@ -283,11 +363,17 @@ def auto_collect_into_model():
                 continue
             if obj in model_objs:
                 continue
+            # Leave objects that belong to a newly imported collection we chose
+            # not to move (instanced-only, protected): that collection is the
+            # import unit, don't strip its contents out.
+            if any(c.name in new_coll_names for c in obj.users_collection):
+                continue
             for coll in list(obj.users_collection):
                 coll.objects.unlink(obj)
             model_coll.objects.link(obj)
             moved.append(name)
-    _seen_object_names = current
+    _seen_object_names = current_objs
+    _seen_collection_names = current_colls
     return moved
 
 
@@ -296,15 +382,16 @@ def _auto_model_timer():
 
     Restricted to OBJECT mode so nothing is relinked mid edit. When the toggle
     is off the baseline is still refreshed, so switching it on later only
-    affects objects imported from that point on, not everything already there.
+    affects things imported from that point on, not everything already there.
     """
-    global _seen_object_names
+    global _seen_object_names, _seen_collection_names
     scene = getattr(bpy.context, "scene", None)
     on = bool(getattr(scene, "lookdev_auto_model", False)) if scene else False
     if on and getattr(bpy.context, "mode", 'OBJECT') == 'OBJECT':
         auto_collect_into_model()
     else:
         _seen_object_names = _current_object_names()
+        _seen_collection_names = _current_collection_names()
     return AUTO_MODEL_POLL
 
 
@@ -801,9 +888,10 @@ def register():
         default=True,
     )
 
-    # Start watching for new objects (imports) to pull into MODEL.
-    global _seen_object_names
+    # Start watching for new objects and collections (imports) to pull into MODEL.
+    global _seen_object_names, _seen_collection_names
     _seen_object_names = _current_object_names()
+    _seen_collection_names = _current_collection_names()
     if not bpy.app.timers.is_registered(_auto_model_timer):
         bpy.app.timers.register(_auto_model_timer, first_interval=AUTO_MODEL_POLL)
 

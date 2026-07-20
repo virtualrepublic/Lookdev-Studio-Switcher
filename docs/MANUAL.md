@@ -150,9 +150,10 @@ The whole point: bring in a model, get a turntable.
 ### 1. Import
 
 Import your model. With **Auto-collect to MODEL** on (the default), it lands in
-the **`MODEL`** collection by itself — no manual drag. Sub-collections are fine;
-the tool looks inside them. Turn the toggle off in the panel if you would rather
-place things yourself.
+the **`MODEL`** collection by itself — no manual drag. If your import brings its
+own collection, that whole collection is moved under `MODEL`, contents and all;
+a single loose object is linked straight into `MODEL`. Turn the toggle off in the
+panel if you would rather place things yourself.
 
 ![A model in the MODEL collection](images/model-imported.png)
 
