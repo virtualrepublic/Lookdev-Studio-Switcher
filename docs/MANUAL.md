@@ -68,22 +68,6 @@ they can't drift apart.
 
 ![Outliner colours matching the panel](images/colours-outliner.png)
 
-### The four scales
-
-<!-- TODO: one line each on the intended use -- what MACRO is for, what LARGE is
-for. The renders show the difference; the words should say when to reach for
-which. -->
-
-<!-- TODO(images): config-macro/small/medium/large.png not shot yet.
-Add them to docs/images/ and restore the ![](images/config-*.png) cells below. -->
-
-| | Render | Use |
-|---|---|---|
-| **MACRO** | _screenshot TODO_ | |
-| **SMALL** | _screenshot TODO_ | |
-| **MEDIUM** | _screenshot TODO_ | |
-| **LARGE** | _screenshot TODO_ | |
-
 ---
 
 ## Framing a model

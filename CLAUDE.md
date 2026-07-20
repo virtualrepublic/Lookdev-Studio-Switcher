@@ -181,6 +181,5 @@ by reading. Keep doing that.
       so the GPL headers are embedded.
 - [ ] Test the compositor migration on a fresh copy — `find_node_group()`
       searching Blender's bundled assets is the only part never run for real.
-- [ ] `docs\MANUAL.md`: the "four scales" table has empty description cells.
 - [ ] Consider a snapshot version stamp (dumper writes it, generator checks it)
       so stale snapshots fail loudly instead of a traceback.
