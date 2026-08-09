@@ -21,6 +21,31 @@ _Work in progress lands here until the next tag._
 
 ---
 
+## [1.2.3] — 2026-08-09
+
+### Fixed
+- **Align & Link Model** (and **FRAME**) now work on a **collection linked or
+  instanced from another scene or file**. Such a collection enters the scene as an
+  empty that *instances* it, with no meshes of its own in `MODEL`, so the
+  measurement found nothing and reported *"No visible geometry found to measure"*.
+  Measuring now expands collection instances through the depsgraph — which also
+  covers nested and library-linked collections — so the model is measured, centred
+  and rigged like any local geometry. FRAME can additionally frame a selected
+  collection instance.
+
+### Changed
+- **FRAME** now grows the frame camera's **far clip (clip end)** to fit large
+  models, so a big object is no longer cut off by the camera's clip plane. The
+  clip end is only ever increased — to the distance of the farthest framed point
+  with a safety margin — so smaller models keep the studio camera's original
+  near/far range.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+Existing users pick it up by re-running the current `setup_lookdev_scene.py` (or
+reloading the panel).
+
+---
+
 ## [1.2.2] — 2026-08-09
 
 ### Fixed
@@ -157,7 +182,8 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.1.0...v1.2.0

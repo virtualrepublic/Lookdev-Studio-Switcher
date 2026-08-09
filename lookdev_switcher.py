@@ -52,7 +52,7 @@
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 2, 2),
+    "version": (1, 2, 3),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -376,18 +376,39 @@ class SCENE_OT_set_config(bpy.types.Operator):
 
 
 def collect_bbox_corners(objects, depsgraph=None):
-    """Return all world-space bounding box corners of the given geo objects.
+    """Return all world-space bounding box corners of the given objects.
 
-    With a depsgraph the evaluated objects are used, so animation, constraints
-    and modifiers are taken into account at the current frame.
+    Geo objects are measured directly (evaluated through the depsgraph when one is
+    given, so modifiers, constraints and animation at the current frame count). A
+    collection-instance empty carries no geometry of its own -- its meshes exist
+    only as depsgraph instances -- so those are expanded to their evaluated world
+    matrices too. That also covers nested and library-linked collections.
     """
     coords = []
+    instancers = set()
     for obj in objects:
-        if obj.type not in GEO_TYPES:
-            continue
-        src = obj.evaluated_get(depsgraph) if depsgraph else obj
-        for corner in src.bound_box:
-            coords.append(src.matrix_world @ mathutils.Vector(corner))
+        if obj.type in GEO_TYPES:
+            src = obj.evaluated_get(depsgraph) if depsgraph else obj
+            for corner in src.bound_box:
+                coords.append(src.matrix_world @ mathutils.Vector(corner))
+        elif obj.type == 'EMPTY' and obj.instance_collection is not None:
+            instancers.add(obj)
+
+    # Expand collection instances. object_instances yields every instanced object
+    # with its evaluated world matrix; keep the ones whose instancer sits in MODEL.
+    if instancers and depsgraph is not None:
+        for inst in depsgraph.object_instances:
+            if not inst.is_instance:
+                continue
+            parent = inst.parent
+            if parent is None or parent.original not in instancers:
+                continue
+            ob = inst.object
+            if ob is None or ob.type not in GEO_TYPES:
+                continue
+            mw = inst.matrix_world
+            for corner in ob.bound_box:
+                coords.append(mw @ mathutils.Vector(corner))
     return coords
 
 
@@ -400,9 +421,21 @@ def visible_geo_objects(objects):
     return [o for o in objects if o.type in GEO_TYPES and o.visible_get()]
 
 
-def compute_bbox_center_floor(objects):
+def visible_instance_empties(objects):
+    """Return visible empties that instance a collection.
+
+    A collection linked or instanced from elsewhere appears as an EMPTY with an
+    instance_collection, not as real meshes in MODEL, so it is invisible to a
+    plain geo scan and has to be gathered separately for measuring.
+    """
+    return [o for o in objects
+            if o.type == 'EMPTY' and o.instance_collection is not None
+            and o.visible_get()]
+
+
+def compute_bbox_center_floor(objects, depsgraph=None):
     """Return (X center, Y center, Z floor) of the world bounding box of all geo objects."""
-    coords = collect_bbox_corners(objects)
+    coords = collect_bbox_corners(objects, depsgraph)
     if not coords:
         return None
     xs = [v.x for v in coords]
@@ -474,6 +507,22 @@ def fit_camera_to_points(cam_obj, points, scene, fill=1.0):
     cam_obj.matrix_world = mw
 
 
+def fit_camera_clip_end(cam_obj, points, margin=2.0):
+    """Push the camera's far clip out so a large model is not clipped away.
+
+    Only ever grows clip_end -- to the distance from the camera to the farthest
+    point times a margin -- so small models keep the studio camera's original
+    near/far range while big ones get enough depth to render in full.
+    """
+    if not points:
+        return
+    cam_pos = cam_obj.matrix_world.translation
+    far = max((p - cam_pos).length for p in points)
+    needed = far * margin
+    if needed > cam_obj.data.clip_end:
+        cam_obj.data.clip_end = needed
+
+
 def get_framing_objects(context, model_coll):
     """Pick the objects to frame and describe where they came from.
 
@@ -482,7 +531,9 @@ def get_framing_objects(context, model_coll):
     2. any selected geo objects
     3. everything in MODEL                          (nothing selected)
     """
-    selected = [o for o in context.selected_objects if o.type in GEO_TYPES]
+    selected = [o for o in context.selected_objects
+                if o.type in GEO_TYPES
+                or (o.type == 'EMPTY' and o.instance_collection is not None)]
     if selected:
         in_model = set(model_coll.all_objects)
         inside = [o for o in selected if o in in_model]
@@ -546,6 +597,7 @@ class SCENE_OT_frame_model(bpy.types.Operator):
         # leaving a safe-action margin so the silhouette does not touch the edge.
         scene.frame_set(FRAME_CHECK_FRAMES[0])
         fit_camera_to_points(cam_obj, corners, scene, FRAME_FILL)
+        fit_camera_clip_end(cam_obj, corners)   # grow far clip for large models
         context.view_layer.update()
 
         scene.frame_set(original_frame)       # restore the original frame
@@ -584,7 +636,14 @@ class SCENE_OT_link_model(bpy.types.Operator):
 
         # 1. Floor midpoint of the overall bounding box (X/Y centered, Z at the floor).
         #    Only visible meshes are measured, so hidden parts cannot skew the result.
-        center = compute_bbox_center_floor(visible_geo_objects(model_coll.all_objects))
+        #    A collection instance (a collection linked from elsewhere) has no meshes
+        #    of its own, so gather its instancer empties too and let the depsgraph
+        #    expand them.
+        depsgraph = context.evaluated_depsgraph_get()
+        model_objs = model_coll.all_objects
+        measurable = (visible_geo_objects(model_objs)
+                      + visible_instance_empties(model_objs))
+        center = compute_bbox_center_floor(measurable, depsgraph)
         if center is None:
             self.report({'ERROR'}, "No visible geometry found to measure")
             scene.frame_set(original_frame)
