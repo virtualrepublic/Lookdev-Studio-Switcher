@@ -21,6 +21,24 @@ _Work in progress lands here until the next tag._
 
 ---
 
+## [1.2.2] — 2026-08-09
+
+### Fixed
+- **The Lookdev panel no longer follows the scene into `File → New`** (or into an
+  unrelated file opened in the same session). Panel classes register per Blender
+  *session*, not per `.blend`, so the panel used to linger in a fresh scene until
+  Blender was restarted. A persistent `load_post` guard now removes the panel, its
+  Scene properties and the background timer whenever the loaded file is not a
+  Lookdev scene, and the tool re-installs itself when a Lookdev file is opened.
+- Registration is now **idempotent**: re-running the script, or opening a second
+  Lookdev file in the same session, no longer risks an "already registered" error.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+Existing users pick it up by re-running the current `setup_lookdev_scene.py` (or
+reloading the panel).
+
+---
+
 ## [1.2.1] — 2026-07-20
 
 ### Fixed
@@ -139,7 +157,8 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.0.2...v1.1.0

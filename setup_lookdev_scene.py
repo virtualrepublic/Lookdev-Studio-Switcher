@@ -191,7 +191,7 @@ TOOL_SOURCE = r'''# ============================================================
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 2, 1),
+    "version": (1, 2, 2),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -847,9 +847,56 @@ class VIEW3D_PT_lookdev_switcher(bpy.types.Panel):
 classes = (SCENE_OT_set_config, SCENE_OT_frame_model, SCENE_OT_link_model,
            SCENE_OT_set_render_path, VIEW3D_PT_lookdev_switcher)
 
+# The tool ships as this text block inside the .blend. Its name is the marker for
+# "this is a Lookdev file": if the block is absent after a load, the scene is not
+# ours and the panel must not follow it (see _lookdev_load_post).
+SELF_TEXT_NAME = "lookdev_switcher.py"
+_is_registered = False
+
+
+@bpy.app.handlers.persistent
+def _lookdev_load_post(_dummy):
+    """After every File > New / Open, drop the panel unless this is a Lookdev
+    file. Class registration is per Blender session, not per .blend, so without
+    this the panel would linger in a new scene until Blender is restarted."""
+    if bpy.data.texts.get(SELF_TEXT_NAME) is None:
+        _teardown()
+
+
+def _teardown():
+    """Remove the panel, its Scene properties and the background timer. Leaves the
+    load_post guard in place so it keeps watching later loads. Safe to call when
+    nothing is registered."""
+    global _is_registered
+    if not _is_registered:
+        return
+    if bpy.app.timers.is_registered(_auto_model_timer):
+        bpy.app.timers.unregister(_auto_model_timer)
+    for prop in ("lookdev_auto_model", "lookdev_dof_depth",
+                 "lookdev_fstop", "lookdev_dof"):
+        if hasattr(bpy.types.Scene, prop):
+            delattr(bpy.types.Scene, prop)
+    for cls in reversed(classes):
+        try:
+            bpy.utils.unregister_class(cls)
+        except Exception:
+            pass
+    _is_registered = False
+
 
 def register():
+    global _is_registered, _seen_object_names, _seen_collection_names
+    if _is_registered:          # re-run in the same session: reset to a clean slate
+        _teardown()
     for cls in classes:
+        # A previous session or an already-open Lookdev file may have registered an
+        # equally-named class; swap it out so re-registration cannot collide.
+        existing = getattr(bpy.types, cls.__name__, None)
+        if existing is not None:
+            try:
+                bpy.utils.unregister_class(existing)
+            except Exception:
+                pass
         bpy.utils.register_class(cls)
 
     bpy.types.Scene.lookdev_dof = bpy.props.BoolProperty(
@@ -889,11 +936,19 @@ def register():
     )
 
     # Start watching for new objects and collections (imports) to pull into MODEL.
-    global _seen_object_names, _seen_collection_names
     _seen_object_names = _current_object_names()
     _seen_collection_names = _current_collection_names()
     if not bpy.app.timers.is_registered(_auto_model_timer):
         bpy.app.timers.register(_auto_model_timer, first_interval=AUTO_MODEL_POLL)
+
+    # Guard file loads so the panel does not follow the scene into File > New or an
+    # unrelated file. Dedup by name: a reopened file re-runs this as a fresh module
+    # with a new function object, so match on __name__, not identity.
+    for h in list(bpy.app.handlers.load_post):
+        if getattr(h, "__name__", "") == "_lookdev_load_post":
+            bpy.app.handlers.load_post.remove(h)
+    bpy.app.handlers.load_post.append(_lookdev_load_post)
+    _is_registered = True
 
     apply_color_tags()      # set outliner colors once on load
     # Apply the SAVED panel values to the cameras (do not force fixed defaults,
@@ -906,14 +961,10 @@ def register():
 
 
 def unregister():
-    if bpy.app.timers.is_registered(_auto_model_timer):
-        bpy.app.timers.unregister(_auto_model_timer)
-    del bpy.types.Scene.lookdev_auto_model
-    del bpy.types.Scene.lookdev_dof_depth
-    del bpy.types.Scene.lookdev_fstop
-    del bpy.types.Scene.lookdev_dof
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+    for h in list(bpy.app.handlers.load_post):
+        if getattr(h, "__name__", "") == "_lookdev_load_post":
+            bpy.app.handlers.load_post.remove(h)
+    _teardown()
 
 
 if __name__ == "__main__":
