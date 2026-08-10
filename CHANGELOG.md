@@ -15,9 +15,44 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ---
 
-## [Unreleased]
+## [1.3.0] — 2026-08-10
+
+**Existing users have to reconvert.** This release changes the scene, and for
+the first time it changes *colour data* rather than only settings — see the
+working colour space entry below. Run the current `setup_lookdev_scene.py` on a
+fresh copy of your download and save it under a new name.
 
 ### Added
+- **The blend file's working colour space now travels.** A master scene
+  converted to ACEScg by hand came out of the migration still on Linear
+  Rec.709, and nothing in any report explained it. The setting is not a scene
+  property at all: Blender's own dialog is titled *Set Blend File Working Color
+  Space*, and the value lives on `bpy.data.colorspace.working_space`. Since
+  `dump_scene.py` records scenes, a property of the *file* could never appear
+  in a snapshot, in a report, or in a generated step. It is recorded now, as
+  `blend_file_settings`. Not to be confused with
+  `render.image_settings.linear_colorspace_settings`, which is the saved EXR's
+  linear space — a different setting with a near-identical name, and one that
+  had been transferring correctly all along.
+
+  Writing it is unlike every other step. The property is read-only, so the only
+  route is `bpy.ops.wm.set_working_color_space(working_space=…,
+  convert_colors=True)` — and that call **converts every colour in the file**:
+  materials, lights, world. `convert_colors` is the checkbox in the dialog and
+  it is what makes the step meaningful; without it the label changes while the
+  numbers stay, which reinterprets the scene instead of converting it. This is
+  why the reconversion note above is not routine: the installer now edits data,
+  not just settings.
+
+  The conversion runs **after** the migration rather than inside it, in a timer
+  of its own, once the interface has settled. Run inline it crashed Blender:
+  an operation that rewrites the whole file has its undo step pushed when the
+  outer `bpy.ops.text.run_script()` finishes, and that reallocates every
+  data-block — including the workspaces the layout transfer had just queued a
+  switch to. Deferring is safe because the migration writes no colour of its
+  own; every generated write is a bool, a string, a number or an enum. One
+  consequence is visible: the result is reported after the *"n change(s)
+  applied"* line, so it is not counted there.
 - **The generated script can carry the interface.** Blender keeps the interface
   in the `.blend`, so a layout can be handed to users — but not through the
   diff: `dump_scene.py` records no interface data, and the API cannot build
@@ -37,7 +72,7 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
   download travels in it, and the export reports what actually went in.
   Optional: without `--workspace` the script carries no layout.
 - **The panel shows its version.** The N-panel header now reads
-  *Lookdev Switcher 1.2.3* instead of *Lookdev Switcher*, taken from
+  *Lookdev Switcher 1.3.0* instead of *Lookdev Switcher*, taken from
   `bl_info["version"]` at registration. A converted scene previously gave no
   way at all to tell which build it carried — the only check was to open the
   text block and read it.

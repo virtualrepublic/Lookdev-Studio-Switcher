@@ -476,6 +476,30 @@ def dump_scene(scene, full):
 
 # --- main -------------------------------------------------------------------
 
+def dump_blend_file():
+    """Settings that belong to the .blend file rather than to any scene.
+
+    The working colour space is the one that matters, and it took a while to
+    find: the Color Management panel shows it as "Working Space > File", but it
+    lives on bpy.data, not on the scene. Everything this dumper recorded until
+    now hung off a scene, so the diff could not see it -- a scene converted to
+    ACEScg by hand came out of the migration still on Linear Rec.709, with no
+    entry in any report to explain why. Measured on 5.2 LTS:
+
+        bpy.data.colorspace.working_space   'ACEScg' / 'Linear Rec.709'
+
+    Not recorded: working_space_interop_id ('lin_ap1_scene'). It is derived
+    from working_space, so recording it would report every change twice.
+
+    The property is read-only -- see make_migration.py for how it is written.
+    """
+    space = getattr(bpy.data, "colorspace", None)
+    if space is None:
+        # Older Blender has no file-level colour space at all.
+        return {}
+    return {"working_space": getattr(space, "working_space", None)}
+
+
 def snapshot(full=False, frame=None):
     """Return the whole structural snapshot as plain Python data.
 
@@ -492,6 +516,7 @@ def snapshot(full=False, frame=None):
     return {
         "blend_file": bpy.path.basename(bpy.data.filepath),
         "blender_version": bpy.app.version_string,
+        "blend_file_settings": safe(dump_blend_file, label="blend file settings"),
         "scenes": {s.name: safe(lambda s=s: dump_scene(s, full), label="scene '%s'" % s.name)
                    for s in bpy.data.scenes},
         "collections": safe(dump_collections, label="collections"),

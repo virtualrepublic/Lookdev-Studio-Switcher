@@ -141,6 +141,9 @@ class Emitter:
         self.phases = {name: [] for name in self.PHASES}
         self.todo = []
         self.count = 0
+        # Not a phase: the working colour space cannot run inside the script
+        # at all. See WORKING_SPACE_BLOCK -- it is deferred to a timer.
+        self.working_space = None
 
     def step(self, phase, lines, comment=None):
         body = self.phases[phase]
@@ -182,6 +185,19 @@ class Emitter:
 
 
 # --- generators --------------------------------------------------------------
+
+def gen_working_space(em, new):
+    """Record the target working colour space. Not a step -- see render().
+
+    This is the one change that cannot be emitted into migrate() at all. It
+    took Blender down when it was: the conversion rebuilds every data-block in
+    the file, the undo push lands when the outer text.run_script() finishes,
+    and by then install_workspace() has queued a workspace switch whose pointer
+    the reallocation has invalidated. The reasoning is in WORKING_SPACE_BLOCK,
+    which is where the code lives now.
+    """
+    em.working_space = new
+
 
 def gen_collection_added(em, name, data):
     lines = [
@@ -554,6 +570,22 @@ def build(before, after, changes):
 
     for kind, path, old, new in changes:
         head = path[0] if path else ""
+
+        # --- blend file ----------------------------------------------------
+        if head == "blend_file_settings" and path[-1:] == ("working_space",):
+            if kind == "changed" and new:
+                gen_working_space(em, new)
+                continue
+        if head == "blend_file_settings" and len(path) == 1 and kind == "added":
+            # The whole section is new: one snapshot predates the dumper knowing
+            # about it. Both snapshots must come from the same dumper, so say so
+            # rather than generating from half the evidence.
+            em.note("blend_file_settings appeared as a whole -- one snapshot is "
+                    "older than the other. Re-run the diff before trusting this.")
+            value = (new or {}).get("working_space")
+            if value:
+                gen_working_space(em, value)
+            continue
 
         # --- collections ---------------------------------------------------
         if head == "collections" and len(path) == 2 and kind == "added":
@@ -945,6 +977,94 @@ def install_tool():
     show_in_editor(text)
 '''
 
+WORKING_SPACE_BLOCK = '''
+# --- the blend file's working colour space -----------------------------------
+#  Deferred to a timer, and not run inside the script at all.
+#
+#  bpy.data.colorspace.working_space is read-only. The only way to change it is
+#  bpy.ops.wm.set_working_color_space(working_space=..., convert_colors=True),
+#  measured on 5.2 LTS, options 'Linear Rec.709', 'Linear Rec.2020', 'ACEScg'.
+#  convert_colors is the checkbox in Blender's own dialog and it is what makes
+#  the step meaningful: without it the label changes while the numbers stay,
+#  which reinterprets every colour instead of converting it.
+#
+#  Called inline, it killed Blender:
+#
+#      blender::ED_workspace_change
+#      blender::WM_window_set_active_workspace
+#      blender::wm_event_do_notifiers        <- after the script, not inside it
+#
+#  The conversion rewrites the whole file, and an operator that large has its
+#  undo step pushed when the OUTER operator -- bpy.ops.text.run_script() --
+#  finishes. That push reallocates every data-block, workspaces included. By
+#  then install_workspace() has queued "show this workspace", and the queued
+#  notifier still holds the old address. The next pass through the notifier
+#  loop reads freed memory and the process is gone.
+#
+#  Same lesson as the workspace deletion before it: anything that rebuilds the
+#  file must not share a script run with the interface work. So this waits for
+#  the workspace chain to report itself finished and then converts in a tick of
+#  its own.
+#
+#  Deferring is safe here, and that was checked rather than assumed: the
+#  generated migration writes no colour anywhere. Every emitted write is a
+#  bool, a string, a number or an enum -- color_tag is an outliner label,
+#  color_depth is '16'. So there is no value that could be converted twice.
+_WS_FINISHED = [True]      # the workspace block clears this while it works
+_CS_TARGET = %s
+_CS_WAITED = [0.0]
+_CS_POLL = 0.25
+_CS_GIVE_UP = 20.0
+
+
+def convert_working_space():
+    """Queue the conversion, but only if it is actually needed."""
+    space = getattr(bpy.data, "colorspace", None)
+    if space is None:
+        log('!! this Blender has no blend file working colour space')
+        return
+    if space.working_space == _CS_TARGET:
+        return                 # already right -- a second run must stay silent
+
+    def run():
+        # Wait for the interface, but never for ever: if the workspace chain
+        # never reports back, converting late is still safe -- the script and
+        # its notifiers are long finished. Only sharing the run was dangerous.
+        if not _WS_FINISHED[0]:
+            _CS_WAITED[0] += _CS_POLL
+            if _CS_WAITED[0] < _CS_GIVE_UP:
+                return _CS_POLL
+            print("      the interface never reported finished -- converting anyway")
+        try:
+            if space.working_space != _CS_TARGET:
+                bpy.ops.wm.set_working_color_space(working_space=_CS_TARGET,
+                                                  convert_colors=True)
+            # bpy.ops is quiet about refusing: workspace.delete() returned
+            # {'CANCELLED'} ten times while the log reported ten removals.
+            # Read the value back before believing anything.
+            if space.working_space == _CS_TARGET:
+                message = "working colour space -> %%s (all colours converted)" %% _CS_TARGET
+            else:
+                message = ("!! working colour space NOT changed, still: %%r"
+                           %% space.working_space)
+        except (AttributeError, TypeError, RuntimeError) as exc:
+            message = "!! skipped working colour space: %%s" %% exc
+        log(message)
+        print("\\n-- Blend file working colour space")
+        print("   %%s" %% message)
+        return None
+
+    try:
+        bpy.app.timers.register(run, first_interval=0.5)
+        # print, not log: nothing has been applied yet, and a change that has
+        # not happened must not show up in the count.
+        print("      working colour space -> %%s queued "
+              "(runs once the interface has settled)" %% _CS_TARGET)
+    except Exception as exc:
+        log("!! could not queue the working colour space change: %%s" %% exc)
+'''
+
+
 WORKSPACE_BLOCK = '''
 # ============================================================================
 #  EMBEDDED INTERFACE -- the workspaces of the source file
@@ -1329,6 +1449,7 @@ def _ws_collapse_outliners(window):
     if window is None:
         _ws_log("  no window -- the interface is left as it is")
         _ws_write_log()
+        _ws_set_finished(True)
         return
 
     started_on = getattr(window, "workspace", None)
@@ -1365,6 +1486,7 @@ def _ws_collapse_outliners(window):
             _ws_log("   is the closest the API allows -- an approximation, not")
             _ws_log("   a copy.)")
             _ws_write_log()
+            _ws_set_finished(True)      # the deferred colour step may go now
             return None
 
         ws = bpy.data.workspaces.get(names[state["i"]])
@@ -1415,6 +1537,18 @@ def _ws_collapse_outliners(window):
         _ws_write_log()
 
 
+def _ws_set_finished(value):
+    """Tell the deferred colour-space step whether the interface is still busy.
+
+    The name only exists when this migration also changes the working colour
+    space, so a missing global is the normal case, not an error.
+    """
+    try:
+        _WS_FINISHED[0] = value
+    except NameError:
+        pass
+
+
 def _ws_retry(names, window):
     """Delete the replaced workspaces, from a timer -- never inline.
 
@@ -1456,6 +1590,9 @@ def _ws_retry(names, window):
 
     try:
         bpy.app.timers.register(again, first_interval=0.5)
+        # From here until the tidy finishes the interface is being rebuilt.
+        # Nothing that reallocates data-blocks may run in between.
+        _ws_set_finished(False)
         _ws_log("  %%d old tab(s) will be removed once the script has finished" %% len(names))
     except Exception as exc:
         _ws_log("  no timer available (%%s) -- these stay:" %% exc)
@@ -1526,6 +1663,10 @@ def render(em, before, after, tool_name=None, tool_source=None, self_name=None,
         out.append(COMPOSITOR_HELPERS)
     if tool_source is not None:
         out.append(SWITCHER_BLOCK % (tool_name, tool_name, tool_source))
+    # Before the workspace block: that block's _ws_set_finished() writes the
+    # flag this one defines.
+    if em.working_space:
+        out.append(WORKING_SPACE_BLOCK % lit(em.working_space))
     if workspace_data is not None:
         out.append(WORKSPACE_BLOCK % (workspace_stamp, workspace_data))
     if self_name:
@@ -1546,6 +1687,14 @@ def render(em, before, after, tool_name=None, tool_source=None, self_name=None,
     if workspace_data is not None:
         out.append('    print("\\n-- 12. Workspace")')
         out.append("    install_workspace()")
+        out.append("")
+    # Last, and after the workspace call on purpose: the conversion waits for
+    # the interface chain that install_workspace() starts, so it has to be
+    # queued once that chain exists.
+    if em.working_space:
+        out.append('    print("\\n-- 13. Blend file working colour space '
+                   '(deferred -- runs after the interface has settled)")')
+        out.append("    convert_working_space()")
         out.append("")
     if self_name:
         out.append("    remove_self()")
