@@ -909,6 +909,59 @@ def _ws_write_log():
         print("  (could not write %%s: %%s)" %% (path, exc))
 
 
+def _drop_workspace(old, name, window):
+    """Delete one workspace. Returns which route worked, or None.
+
+    Several routes, because which one a given Blender honours is not something
+    this script can know: 5.2 has no bpy.data.workspaces.remove() at all
+    ('attribute "remove" not found'), and bpy.ops.workspace.delete() answered
+    {'CANCELLED'} without raising -- an operator that does nothing is silent,
+    so every attempt here is CHECKED by looking the name up again afterwards.
+
+    The operator deletes whatever workspace the CONTEXT holds, not one passed
+    to it. Both operator routes therefore confirm that the context really shows
+    this workspace before firing -- otherwise it would delete the wrong tab,
+    quite possibly one of the ones just installed.
+    """
+    # 1. batch_remove works on any ID and needs no context at all.
+    try:
+        bpy.data.batch_remove([old])
+        if bpy.data.workspaces.get(name) is None:
+            return "batch_remove"
+    except Exception as exc:
+        _ws_log("      batch_remove: %%s" %% exc)
+
+    # 2. the tab's right-click operator, with the workspace put into the
+    #    context for the duration of the call.
+    try:
+        with bpy.context.temp_override(window=window, workspace=old):
+            if getattr(bpy.context, "workspace", None) == old:
+                bpy.ops.workspace.delete()
+            else:
+                _ws_log("      override did not reach context.workspace")
+        if bpy.data.workspaces.get(name) is None:
+            return "operator, context override"
+    except Exception as exc:
+        _ws_log("      operator/override: %%s" %% exc)
+
+    # Deliberately NOT a route: assigning window.workspace to the doomed one and
+    # firing the operator. The assignment is applied on the next UI pass, so the
+    # operator would act on whatever is on screen -- possibly a tab just
+    # installed -- and the window would be left pointing at a workspace meant to
+    # go, which is what made the tab on screen survive both passes.
+
+    # 3. drop the fake user and let the purge collect it.
+    try:
+        old.use_fake_user = False
+        bpy.data.orphans_purge(do_local_ids=True, do_recursive=False)
+        if bpy.data.workspaces.get(name) is None:
+            return "orphans_purge"
+    except Exception as exc:
+        _ws_log("      orphans_purge: %%s" %% exc)
+
+    return None
+
+
 def install_workspace():
     """Wrapper: this step must never abort the migration, and must always log.
 
@@ -1008,44 +1061,89 @@ def _install_workspace():
         except Exception as exc:
             _ws_log("  ! could not rename '%%s' to '%%s': %%s" %% (ws.name, name, exc))
 
-    # Now drop the old ones. Two ways, because which of them works in a given
-    # Blender is not something this script can know in advance: the data-level
-    # remove(), and failing that the operator behind the tab's right-click menu,
-    # which needs the workspace to be the active one.
+    # Now drop the old ones.
+    #
+    # bpy.data.workspaces has no remove() -- Blender 5.2 answers
+    # 'attribute "remove" not found'. The only way to drop a workspace is the
+    # operator behind the tab's right-click menu, and it acts on the workspace
+    # in the CONTEXT, not on one handed to it. Assigning window.workspace does
+    # not help: that takes effect on the next UI pass, so the operator would
+    # still see the workspace that was active when the script started.
+    # temp_override puts the right one in the context for the call.
+    #
+    # And every attempt is CHECKED by looking. bpy.ops raises only when the
+    # poll fails; an operator that does nothing returns {'CANCELLED'} quietly.
+    # An earlier version treated "no exception" as success and reported ten
+    # removals that never happened.
+    # Move off the old tabs BEFORE deleting: Blender will not drop a workspace a
+    # window is showing. The assignment only takes effect on the next UI pass,
+    # which is why the tab that happens to be open survives the first pass and
+    # is retried from a timer below.
     window = getattr(bpy.context, "window", None)
+    if window is not None and loaded:
+        target = bpy.data.workspaces.get("Layout") or loaded[0]
+        try:
+            window.workspace = target
+            _ws_log("  active tab set to '%%s'" %% target.name)
+        except Exception as exc:
+            _ws_log("  could not switch to '%%s': %%s" %% (target.name, exc))
+
     survivors = []
     for old in doomed:
-        removed = False
-        try:
-            bpy.data.workspaces.remove(old)
-            removed = True
-            _ws_log("      removed the old '%%s' (data)" %% old.name)
-        except Exception as exc:
-            _ws_log("      remove() refused '%%s': %%s" %% (old.name, exc))
-        if not removed and window is not None:
-            try:
-                window.workspace = old
-                bpy.ops.workspace.delete()
-                removed = True
-                _ws_log("      removed the old '%%s' (operator)" %% old.name)
-            except Exception as exc:
-                _ws_log("      delete() refused '%%s': %%s" %% (old.name, exc))
-        if not removed:
-            survivors.append(old.name)
-
-    if window is not None and loaded:
-        try:
-            window.workspace = loaded[0]
-        except Exception:
-            pass
+        name = old.name
+        how = _drop_workspace(old, name, window)
+        if how:
+            _ws_log("      removed '%%s' (%%s)" %% (name, how))
+        else:
+            survivors.append(name)
+            _ws_log("      '%%s' still here -- retrying in a moment" %% name)
 
     if survivors:
-        _ws_log("")
-        _ws_log("  %%d old workspace(s) could not be removed:" %% len(survivors))
-        for name in survivors:
+        _ws_retry(survivors, window)
+        return
+
+def _ws_retry(names, window):
+    """Try the survivors again once the interface has caught up.
+
+    The workspace a window is showing cannot be deleted, and switching away
+    from it is applied on the next UI pass -- after this script has finished.
+    A one-shot timer runs when that pass is done, so the tab that was open when
+    the script ran can go too. Without it exactly one old tab always survives.
+    """
+    def again():
+        left = []
+        for name in names:
+            old = bpy.data.workspaces.get(name)
+            if old is None:
+                _ws_log("      removed '%%s' (after the interface caught up)" %% name)
+                continue
+            how = _drop_workspace(old, name, window)
+            if how:
+                _ws_log("      removed '%%s' (%%s, second pass)" %% (name, how))
+            else:
+                left.append(name)
+        if left:
+            _ws_log("")
+            _ws_log("  %%d old workspace(s) could not be removed:" %% len(left))
+            for name in left:
+                _ws_log("      %%s" %% name)
+            _ws_log("  They are marked [replaced] -- right-click the tab > Delete.")
+        else:
+            _ws_log("  all old workspaces removed")
+        _ws_write_log()
+        return None            # one shot
+
+    try:
+        bpy.app.timers.register(again, first_interval=0.2)
+        _ws_log("  %%d tab(s) left for the second pass" %% len(names))
+    except Exception as exc:
+        _ws_log("  no timer available (%%s) -- these stay:" %% exc)
+        for name in names:
             _ws_log("      %%s" %% name)
         _ws_log("  They are marked [replaced] -- right-click the tab > Delete.")
 '''
+
+
 
 FOOTER = '''
     print("\\n" + "=" * 74)
