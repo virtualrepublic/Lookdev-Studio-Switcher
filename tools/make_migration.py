@@ -882,6 +882,33 @@ WORKSPACE_BLEND = (
 %s)
 
 
+_ws_lines = []
+
+
+def _ws_log(text):
+    """Log for the interface step -- to the console AND to a file.
+
+    Everything else in this script reports to stdout, which on Windows means
+    the system console, hidden unless someone opened it. For this step that is
+    not good enough: if a workspace cannot be replaced, the visible result is a
+    file full of "Layout.001" tabs and no reason anywhere.
+    """
+    print(text)
+    _ws_lines.append(text)
+
+
+def _ws_write_log():
+    import tempfile
+    folder = os.path.dirname(bpy.data.filepath) or tempfile.gettempdir()
+    path = os.path.join(folder, "lookdev_workspace.log.txt")
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("\\n".join(_ws_lines) + "\\n")
+        print("  log written: %%s" %% path)
+    except Exception as exc:
+        print("  (could not write %%s: %%s)" %% (path, exc))
+
+
 def install_workspace():
     """Put the interface from the source file into this one.
 
@@ -897,10 +924,14 @@ def install_workspace():
     import zlib
     import tempfile
 
+    _ws_log("  interface stamp %%s" %% WORKSPACE_STAMP)
     for existing in bpy.data.workspaces:
         if existing.get("lookdev_ui") == WORKSPACE_STAMP:
-            log("interface already at this version -- left alone")
+            _ws_log("  already at this version -- nothing to do")
+            _ws_write_log()
             return
+    _ws_log("  workspaces in this file before: %%s"
+            %% ", ".join(w.name for w in bpy.data.workspaces))
 
     tmp = os.path.join(tempfile.gettempdir(), "lookdev_ui_%%d.blend" %% os.getpid())
     wanted, loaded = [], []
@@ -914,8 +945,9 @@ def install_workspace():
             dst.workspaces = wanted
         loaded = [ws for ws in dst.workspaces if ws is not None]
     except Exception as exc:
-        print("  ! could not read the embedded interface: %%s" %% exc)
-        print("    Everything else was applied -- only the layout is missing.")
+        _ws_log("  ! could not read the embedded interface: %%s" %% exc)
+        _ws_log("    Everything else was applied -- only the layout is missing.")
+        _ws_write_log()
         return
     finally:
         try:
@@ -924,39 +956,74 @@ def install_workspace():
             pass
 
     if len(loaded) != len(wanted):
-        print("  ! %%d of %%d workspaces came through; leaving names as they are"
-              %% (len(loaded), len(wanted)))
+        _ws_log("  ! %%d of %%d workspaces came through; names left as they are"
+                %% (len(loaded), len(wanted)))
         for ws in loaded:
             ws["lookdev_ui"] = WORKSPACE_STAMP
+        _ws_write_log()
         return
 
-    # Stand on one of the new ones first: the workspace being removed must not
-    # be the one the window is showing.
+    # Free the names FIRST by renaming the old workspaces aside, then rename the
+    # new ones onto them. Renaming always works; removing does not -- Blender
+    # refuses to drop a workspace a window is showing. Doing it in this order
+    # means the tabs carry the right names even when nothing can be removed.
+    doomed = []
+    for name, ws in zip(wanted, loaded):
+        ws["lookdev_ui"] = WORKSPACE_STAMP
+        old = bpy.data.workspaces.get(name)
+        if old is None or old == ws:
+            _ws_log("  + '%%s' added" %% ws.name)
+            continue
+        try:
+            old.name = "%%s [replaced]" %% name
+            doomed.append(old)
+        except Exception as exc:
+            _ws_log("  ! could not rename the existing '%%s': %%s" %% (name, exc))
+            continue
+        try:
+            ws.name = name
+            _ws_log("  + '%%s' replaced" %% name)
+        except Exception as exc:
+            _ws_log("  ! could not rename '%%s' to '%%s': %%s" %% (ws.name, name, exc))
+
+    # Now drop the old ones. Two ways, because which of them works in a given
+    # Blender is not something this script can know in advance: the data-level
+    # remove(), and failing that the operator behind the tab's right-click menu,
+    # which needs the workspace to be the active one.
     window = getattr(bpy.context, "window", None)
+    survivors = []
+    for old in doomed:
+        removed = False
+        try:
+            bpy.data.workspaces.remove(old)
+            removed = True
+            _ws_log("      removed the old '%%s' (data)" %% old.name)
+        except Exception as exc:
+            _ws_log("      remove() refused '%%s': %%s" %% (old.name, exc))
+        if not removed and window is not None:
+            try:
+                window.workspace = old
+                bpy.ops.workspace.delete()
+                removed = True
+                _ws_log("      removed the old '%%s' (operator)" %% old.name)
+            except Exception as exc:
+                _ws_log("      delete() refused '%%s': %%s" %% (old.name, exc))
+        if not removed:
+            survivors.append(old.name)
+
     if window is not None and loaded:
         try:
             window.workspace = loaded[0]
         except Exception:
             pass
 
-    for name, ws in zip(wanted, loaded):
-        ws["lookdev_ui"] = WORKSPACE_STAMP
-        if ws.name == name:
-            log("workspace '%%s' added" %% name)
-            continue
-        old = bpy.data.workspaces.get(name)
-        if old is not None and old != ws:
-            try:
-                bpy.data.workspaces.remove(old)
-            except Exception as exc:
-                print("  ! kept the existing '%%s' (%%s); the new one stays '%%s'"
-                      %% (name, exc, ws.name))
-                continue
-        try:
-            ws.name = name
-            log("workspace '%%s' replaced" %% name)
-        except Exception as exc:
-            print("  ! could not rename '%%s' to '%%s': %%s" %% (ws.name, name, exc))
+    if survivors:
+        _ws_log("")
+        _ws_log("  %%d old workspace(s) could not be removed:" %% len(survivors))
+        for name in survivors:
+            _ws_log("      %%s" %% name)
+        _ws_log("  They are marked [replaced] -- right-click the tab > Delete.")
+    _ws_write_log()
 '''
 
 FOOTER = '''
