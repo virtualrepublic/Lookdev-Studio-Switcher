@@ -10,30 +10,38 @@ reads it automatically from there. `HANDOFF.md` and `WORKFLOW.md` stay in
 
 ---
 
-## Two folders — the repo is not the working folder
+## One folder — working data lives inside the repo, git-ignored
+
+The repository root is `D:\_GitHub_\virtualrepublic\Lookdev-Studio-Switcher\`.
+Everything belonging to the project is inside it; the scenes sit in `_local\`,
+which `.gitignore` blocks. So the repo is the whole project — copy it, back it
+up or delete it as one unit — while nothing from `_local\` can ever be pushed.
 
 ```
-…\LookDevScene\Blender\COMPARE\        ← working folder (NOT the repo)
-├── LOOKDEV_STUDIO_ORIGINAL.blend      the untouched download (reference)
-├── LOOKDEV_STUDIO_COPY.blend          the reworked scene — all edits happen here
-├── LOOKDEV_STUDIO_SETUP.blend         a test conversion
-├── snap_original.json / snap_modified.json   diff snapshots (regenerated)
-├── Report\                            diff reports, history
-├── _CLAUDE_\                          the VibeCoding .docx (HANDOFF/WORKFLOW moved into the repo)
-└── GitHub\                            ← THE REPOSITORY (its own .git)
+Lookdev-Studio-Switcher\               ← THE REPOSITORY (its own .git)
+├── …tracked files, see below…
+└── _local\                            ← working data, git-ignored
+    ├── LOOKDEV_STUDIO_ORIGINAL.blend  the untouched download (reference)
+    ├── LOOKDEV_STUDIO_COPY.blend      the reworked scene — all edits happen here
+    ├── LOOKDEV_STUDIO_SETUP.blend     a test conversion
+    ├── snap_original.json / snap_modified.json   diff snapshots (regenerated)
+    ├── Report\                        diff reports, history
+    └── CMD.txt                        the two toolchain command lines, ready to paste
 ```
 
-Everything the user runs happens in `COMPARE\`, against the `.blend` files there.
-The repository is the `GitHub\` subfolder. Keep the two straight: scenes,
-snapshots and reports are working data and are git-ignored; only `GitHub\` is
-version-controlled and pushed to `virtualrepublic/Lookdev-Studio-Switcher`.
+Blender commands are run **from `_local\`**, so the snapshots and reports land
+there; the toolchain is addressed one level up as `..\tools\`. Only the tracked
+files are pushed to `virtualrepublic/Lookdev-Studio-Switcher`.
+
+Earlier this was two sibling folders (`COMPARE\` holding the scenes, `GitHub\`
+holding the repo). If you meet that layout in old notes, this is what replaced it.
 
 ---
 
-## Repository layout (`GitHub\`)
+## Repository layout
 
 ```
-GitHub\
+Lookdev-Studio-Switcher\
 ├── CLAUDE.md                   this file — Claude Code entry point (tracked)
 ├── README.md
 ├── CHANGELOG.md
@@ -53,8 +61,9 @@ GitHub\
 │   ├── diff_blends.py
 │   ├── make_migration.py
 │   └── new-release.ps1         release helper (PowerShell)
-├── _CLAUDE_\                   HANDOFF, WORKFLOW — private notes, git-ignored
-└── _BACKUP_\                   V000, V100, _notes, v1.0.0 zip — git-ignored
+├── _CLAUDE_\                   HANDOFF, WORKFLOW, VibeCoding .docx — git-ignored
+├── _BACKUP_\                   V000, V100, _notes, v1.0.0 zip — git-ignored
+└── _local\                     the .blend scenes and diff output — git-ignored
 ```
 
 `setup_lookdev_scene.py` is **generated** by the toolchain, never hand-edited.
@@ -91,12 +100,13 @@ dumper change forces a fresh diff run before regenerating. This has crashed once
 ## The update procedure (short form)
 
 Full version in `_CLAUDE_\WORKFLOW.md`. Two commands, in order, run by the user on
-their machine (Blender is not in this environment). Note the scripts now live in
-`GitHub\tools\` while the scenes are one level up in `COMPARE\`:
+their machine (Blender is not in this environment). Both are run **from `_local\`**,
+where the scenes are; the scripts sit one level up in `tools\`. Ready to paste in
+`_local\CMD.txt`, with the full path to the Blender executable:
 
 ```
-blender --background --python GitHub\tools\diff_blends.py -- LOOKDEV_STUDIO_ORIGINAL.blend LOOKDEV_STUDIO_COPY.blend --keep-snapshots snap --summary
-blender --background --python GitHub\tools\make_migration.py -- snap_original.json snap_modified.json --switcher GitHub\lookdev_switcher.py -o GitHub\setup_lookdev_scene.py
+blender --background --python ..\tools\diff_blends.py -- LOOKDEV_STUDIO_ORIGINAL.blend LOOKDEV_STUDIO_COPY.blend --keep-snapshots snap --summary
+blender --background --python ..\tools\make_migration.py -- snap_original.json snap_modified.json --switcher ..\lookdev_switcher.py -o ..\setup_lookdev_scene.py
 ```
 
 `diff_blends.py` imports `dump_scene.py` and `compare_scenes.py` from its **own**
@@ -160,15 +170,15 @@ by reading. Keep doing that.
 ## Housekeeping noticed in the tree (decide and clean up)
 
 - **Duplicate scripts — resolved.** The loose toolchain copies and
-  `setup_lookdev_scene.py` in `COMPARE\` root were byte-identical to the repo
-  versions and have been removed; the repo (`GitHub\tools\`, `GitHub\`) is the
-  single source of truth. The old `setup_generated.py` was archived to
-  `GitHub\_BACKUP_\_superseded\setup_generated_260717.py` (git-ignored) rather
-  than deleted. `CMD.txt` in `COMPARE\` now points at `GitHub\tools\`.
+  `setup_lookdev_scene.py` in the old working folder were byte-identical to the
+  repo versions and have been removed; `tools\` is the single source of truth.
+  The old `setup_generated.py` was archived to
+  `_BACKUP_\_superseded\setup_generated_260717.py` (git-ignored) rather than
+  deleted. `_local\CMD.txt` points at `..\tools\`.
 - **`tools\` and `docs\MAINTAINING.md` are now public.** Earlier the intent was
   to keep the toolchain private. Publishing it is a fine choice — it makes the
   copyright argument transparent — but confirm it was intentional, not accidental.
-- **Handoff notes now live in `GitHub\_CLAUDE_\`** — `HANDOFF.md` and
+- **Handoff notes now live in `_CLAUDE_\`** — `HANDOFF.md` and
   `WORKFLOW.md`, git-ignored (private). `CLAUDE.md` sits at the repo root and is
   tracked, so Claude Code loads it automatically. (Resolved.)
 - **`CHANGELOG.md` exists** — keep it in step with each release and the tags.
@@ -177,8 +187,15 @@ by reading. Keep doing that.
 
 ## Open items
 
-- [ ] Regenerate `setup_lookdev_scene.py` with the current `lookdev_switcher.py`
-      so the GPL headers are embedded.
+- [x] Regenerate `setup_lookdev_scene.py` with the current `lookdev_switcher.py`
+      so the GPL headers are embedded. — Done: the `TOOL_SOURCE` block was
+      verified line-by-line against `lookdev_switcher.py` and is identical (892
+      lines). Re-verify that way rather than trusting this checkbox.
+- [ ] The copyright line now reads `Prof. Michael Klein` (Amtstitel, part of the
+      name — not an academic degree to be dropped in legal notices). It was
+      changed in `lookdev_switcher.py` **and** in the embedded copy inside
+      `setup_lookdev_scene.py`, so the two stay in sync without Blender. The next
+      regeneration reproduces it; no action needed unless the two diverge.
 - [ ] Test the compositor migration on a fresh copy — `find_node_group()`
       searching Blender's bundled assets is the only part never run for real.
 - [ ] Consider a snapshot version stamp (dumper writes it, generator checks it)

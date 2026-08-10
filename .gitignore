@@ -20,6 +20,12 @@ report*.txt
 /Report/
 
 # ----------------------------------------------------------------------------
+#  Working data -- the .blend scenes, snapshots and diff reports live here.
+#  Never pushed: the Studio Lookdev scene is not ours to redistribute.
+# ----------------------------------------------------------------------------
+/_local/
+
+# ----------------------------------------------------------------------------
 #  Local version backups (ZIP snapshots + working notes live here, never pushed)
 # ----------------------------------------------------------------------------
 /_BACKUP_/
