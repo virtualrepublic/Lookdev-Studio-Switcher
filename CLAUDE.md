@@ -187,6 +187,28 @@ Scene change → release notes must say **existing users have to reconvert**.
 - **Generated code catches `(AttributeError, TypeError)`** and logs skips — so a
   skipped setting can look like success. When something *should* land and the log
   says "skipped", do not believe it, check. (This nearly lost ACEScg.)
+- **Never delete a workspace from inside the running script.** Deleting one frees
+  its screens and areas; the script runs inside `bpy.ops.text.run_script()`, and
+  when that operator finishes Blender builds its redo panel for the area it ran
+  in. If that area has been freed, Blender dies with an access violation in
+  `ED_area_type_hud_clear`. Appending and renaming are safe; deletion waits for a
+  one-shot timer, after the operator has finished.
+- **`bpy.ops` raises only when the poll fails.** An operator that declines does
+  it silently with `{'CANCELLED'}`, so "no exception" is not evidence. Check the
+  result by looking — an earlier version reported ten workspace removals that
+  never happened.
+- **`bpy.data.libraries.load()` fills `data_to` in place.** Hand it the same list
+  you keep the names in and that list turns into datablocks behind your back.
+- **How much of the interface can travel — measured, not guessed:** the workspace
+  structure does (areas, splits, editor types, sizes). These do **not**, and no
+  amount of work will change that:
+  - *Outliner expanded/collapsed state.* `SpaceOutliner` exposes no `treestore`,
+    `tree`, `expanded`, `open` or `state` — nothing at all. It is stored as
+    references to the datablocks of the file it was saved in, so appending a
+    workspace alone cannot carry it.
+  - *The N-panel tab.* `Region.active_panel_category` is read-only.
+  `bpy.data.workspaces` also has no `remove()`; deletion goes through
+  `bpy.data.batch_remove()` or the tab's delete operator.
 
 ---
 
