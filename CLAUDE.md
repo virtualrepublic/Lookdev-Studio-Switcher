@@ -21,17 +21,42 @@ up or delete it as one unit — while nothing from `_local\` can ever be pushed.
 Lookdev-Studio-Switcher\               ← THE REPOSITORY (its own .git)
 ├── …tracked files, see below…
 └── _local\                            ← working data, git-ignored
-    ├── LOOKDEV_STUDIO_ORIGINAL.blend  the untouched download (reference)
-    ├── LOOKDEV_STUDIO_COPY.blend      the reworked scene — all edits happen here
-    ├── LOOKDEV_STUDIO_SETUP.blend     a test conversion
+    ├── Textures\                      albin's textures, 45 files, 883 MB
+    ├── scenes\
+    │   ├── LOOKDEV_STUDIO_ALBIN_293.blend      albin's download, Blender 2.93  [read-only]
+    │   ├── LOOKDEV_STUDIO_TEST_520.blend       throwaway test conversion
+    │   └── COMPARE\
+    │       ├── LOOKDEV_STUDIO_ORIGINAL_520.blend   left side of the diff   [read-only]
+    │       └── LOOKDEV_STUDIO_MODIFIED_520.blend   right side — THE MASTER
     ├── snap_original.json / snap_modified.json   diff snapshots (regenerated)
     ├── Report\                        diff reports, history
-    └── CMD.txt                        the two toolchain command lines, ready to paste
+    └── CMD.txt                        every command line, ready to paste
 ```
+
+**Three scenes, three roles — do not conflate them:**
+
+| File | Role | Replaceable |
+|---|---|---|
+| `ALBIN_293` | albin's download, Blender 2.93. What users actually get. Never edit. | yes — download again |
+| `ORIGINAL_520` | the same scene opened in 5.2 and saved. Only ever the **left side of the diff**, so both sides are read through the same Blender and version-upgrade noise cannot appear as an intentional change. | yes — reproducible |
+| `MODIFIED_520` | the reworked scene, built by hand. **The source of truth**: everything in `setup_lookdev_scene.py` derives from the diff against it. | **no** |
+
+`ORIGINAL_520` is *not* the untouched download — earlier notes said so and were
+wrong. The `.blend` header proves it: `ALBIN_293` carries `BLENDER-v293`,
+`ORIGINAL_520` carries `BLENDER17-01v0502`.
+
+**Why the scenes sit in subfolders.** They store relative texture paths:
+`ALBIN_293` says `//..\Textures\`, the `COMPARE\` pair says `//..\..\Textures\`.
+Both resolve to `_local\Textures\` — but only at these depths. A scene moved to
+another level loses its textures. Copies of `ALBIN_293` therefore stay in
+`scenes\`, copies of the pair stay in `scenes\COMPARE\`.
 
 Blender commands are run **from `_local\`**, so the snapshots and reports land
 there; the toolchain is addressed one level up as `..\tools\`. Only the tracked
 files are pushed to `virtualrepublic/Lookdev-Studio-Switcher`.
+
+`_local\` is the one thing git cannot protect: `MODIFIED_520` exists once, on one
+disk, and the repository alone is not enough to rebuild the project without it.
 
 Earlier this was two sibling folders (`COMPARE\` holding the scenes, `GitHub\`
 holding the repo). If you meet that layout in old notes, this is what replaced it.
