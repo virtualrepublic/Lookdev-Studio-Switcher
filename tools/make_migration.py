@@ -1088,27 +1088,38 @@ def _install_workspace():
         except Exception as exc:
             _ws_log("  could not switch to '%%s': %%s" %% (target.name, exc))
 
-    survivors = []
-    for old in doomed:
-        name = old.name
-        how = _drop_workspace(old, name, window)
-        if how:
-            _ws_log("      removed '%%s' (%%s)" %% (name, how))
-        else:
-            survivors.append(name)
-            _ws_log("      '%%s' still here -- retrying in a moment" %% name)
-
-    if survivors:
-        _ws_retry(survivors, window)
-        return
+    # NOTHING is deleted here. This code runs inside bpy.ops.text.run_script(),
+    # and deleting a workspace frees its screens and areas -- including, quite
+    # possibly, the one the operator is running in. When the operator then
+    # finishes, Blender builds its redo panel for that area and reads freed
+    # memory:
+    #
+    #   EXCEPTION_ACCESS_VIOLATION
+    #   ED_area_type_hud_clear <- ED_area_type_hud_ensure <- wm_operator_finished
+    #
+    # Appending and renaming are data-level and safe. Deleting is not, so it
+    # waits for the timer below, which runs after the operator has finished.
+    if doomed:
+        _ws_retry([old.name for old in doomed], window)
+    else:
+        _ws_log("  nothing to remove")
+    return
 
 def _ws_retry(names, window):
-    """Try the survivors again once the interface has caught up.
+    """Delete the replaced workspaces, from a timer -- never inline.
 
-    The workspace a window is showing cannot be deleted, and switching away
-    from it is applied on the next UI pass -- after this script has finished.
-    A one-shot timer runs when that pass is done, so the tab that was open when
-    the script ran can go too. Without it exactly one old tab always survives.
+    Two reasons this cannot happen while the script is running:
+
+    * Deleting a workspace frees its screens and areas. The script runs inside
+      bpy.ops.text.run_script(), and when that operator finishes Blender builds
+      its redo panel for the area it ran in. If that area has been freed, the
+      access violation is immediate and Blender is gone.
+    * The workspace a window is showing cannot be deleted at all, and switching
+      away from it is applied on the next UI pass -- which has not happened
+      while the script is still running.
+
+    By the time this timer fires the operator has finished and the switch has
+    landed, so neither problem applies.
     """
     def again():
         left = []
@@ -1134,8 +1145,8 @@ def _ws_retry(names, window):
         return None            # one shot
 
     try:
-        bpy.app.timers.register(again, first_interval=0.2)
-        _ws_log("  %%d tab(s) left for the second pass" %% len(names))
+        bpy.app.timers.register(again, first_interval=0.5)
+        _ws_log("  %%d old tab(s) will be removed once the script has finished" %% len(names))
     except Exception as exc:
         _ws_log("  no timer available (%%s) -- these stay:" %% exc)
         for name in names:
