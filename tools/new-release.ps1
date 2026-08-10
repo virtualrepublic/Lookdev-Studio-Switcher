@@ -68,8 +68,21 @@ if (-not (Test-Path '.git')) {
 }
 
 $tag = "v$Version"
-if (git tag --list $tag) {
-    throw "Tag $tag already exists. Pick a new version number."
+# The script's own closing line tells you to review the local result and then
+# re-run with -Publish. A blanket refusal on an existing tag made that
+# impossible: the first run creates the tag, the second is turned away, and the
+# only way out is deleting the tag by hand. So an existing tag is fatal only
+# when it points somewhere other than HEAD -- that is a genuine collision, a
+# version number already used for different code.
+$tagExists = [bool](git tag --list $tag)
+if ($tagExists) {
+    $tagged = (git rev-list -n 1 $tag).Trim()
+    $head   = (git rev-parse HEAD).Trim()
+    if ($tagged -ne $head) {
+        throw "Tag $tag already exists and points at $($tagged.Substring(0,7)), " +
+              "not at HEAD $($head.Substring(0,7)). Pick a new version number."
+    }
+    Write-Host "==> $tag already exists on HEAD -- resuming this release." -ForegroundColor Yellow
 }
 
 # The release asset must be the regenerated, version-bumped installer, not a
@@ -131,14 +144,25 @@ git add -A
 git diff --cached --quiet                       # exit 0 = nothing staged
 if ($LASTEXITCODE -eq 0) {
     Write-Host "    (nothing to commit -- tagging the current HEAD)" -ForegroundColor Yellow
+} elseif ($tagExists) {
+    # Committing here would move HEAD past the tag, and the tag would then
+    # name something other than what is about to be published -- the reviewed
+    # result and the released result would silently differ.
+    throw "$tag already exists on HEAD, but there are new changes to commit. " +
+          "Either release them under a new version, or drop the tag " +
+          "(git tag -d $tag) and run this again from the top."
 } else {
     git commit -m "$Version - $Message"
     Assert-LastExit 'git commit'
 }
 
-Write-Host "==> Tagging $tag..." -ForegroundColor Cyan
-git tag -a $tag -m "$tag - $Message"
-Assert-LastExit 'git tag'
+if ($tagExists) {
+    Write-Host "==> Tag $tag is already on this commit -- keeping it." -ForegroundColor Cyan
+} else {
+    Write-Host "==> Tagging $tag..." -ForegroundColor Cyan
+    git tag -a $tag -m "$tag - $Message"
+    Assert-LastExit 'git tag'
+}
 
 Write-Host "==> Writing ZIP snapshot..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path '_BACKUP_' | Out-Null
