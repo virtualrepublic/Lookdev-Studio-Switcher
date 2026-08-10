@@ -61,7 +61,11 @@ function Assert-LastExit([string]$what) {
 function Get-ChangelogNotes([string]$version) {
     if (-not (Test-Path 'CHANGELOG.md')) { return $null }
     $text = Get-Content 'CHANGELOG.md' -Raw
-    $pattern = '(?ms)^\#\#\s*\[' + [regex]::Escape($version) + '\][^\n]*\n(.*?)(?=^\#\#\s)'
+    # Stop at the next VERSION heading -- "## [x.y.z]" -- or at the end of the
+    # file. Stopping at any "## " cut the v1.0.0 notes off at their own "## Setup"
+    # sub-heading and published two lines, and the oldest entry has no heading
+    # after it at all, only the link definitions.
+    $pattern = '(?ms)^\#\#\s*\[' + [regex]::Escape($version) + '\][^\n]*\n(.*?)(?=^\#\#\s*\[|\z)'
     $m = [regex]::Match($text, $pattern)
     if (-not $m.Success) { return $null }
     $body = $m.Groups[1].Value.TrimEnd()

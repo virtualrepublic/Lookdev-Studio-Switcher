@@ -371,7 +371,7 @@ Housekeeping release — no functional change to the tool or the installer.
 
 First public release.
 
-## The scene is not included
+### The scene is not included
 
 Free, but not mine — download it from the author:
 
@@ -381,14 +381,14 @@ Free, but not mine — download it from the author:
 `setup_lookdev_scene.py` extends *your* copy. Nothing of the author's work is
 distributed here.
 
-## Setup
+### Setup
 
 Download `setup_lookdev_scene.py`, open it in Blender's Text Editor, press
 **Run Script**, then **Save As** under a new name. Blender 5.2 or newer.
 
 Full instructions: [README](https://github.com/virtualrepublic/Lookdev-Studio-Switcher#readme)
 
-## What you get
+### What you get
 
 Five configuration buttons, depth of field for all cameras at once, and
 one-press turntable rigging for any model you import.
