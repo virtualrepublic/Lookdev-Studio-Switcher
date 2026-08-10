@@ -1489,14 +1489,14 @@ def render(em, before, after, tool_name=None, tool_source=None, self_name=None,
     # last steps inside migrate(): the scene is ready, hand over the tool,
     # then clear this one-shot script out of the file
     if tool_source is not None:
-        out.append('    print("\\n-- 9. Lookdev tool")')
+        out.append('    print("\\n-- 11. Lookdev tool")')
         out.append("    install_tool()")
         out.append("")
     # After the tool, not before: install_tool() puts the tool into every open
     # Text Editor, and appending the workspace switches the visible one. Doing
     # the layout last also makes it the thing the user is left looking at.
     if workspace_data is not None:
-        out.append('    print("\\n-- 10. Workspace")')
+        out.append('    print("\\n-- 12. Workspace")')
         out.append("    install_workspace()")
         out.append("")
     if self_name:
