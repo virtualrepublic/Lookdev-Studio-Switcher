@@ -99,7 +99,8 @@ Lookdev-Studio-Switcher\
 │   ├── export_workspace.py     the interface of a .blend -> _local\workspace_ui.blend
 │   │                           GUI only; a background Blender holds no workspaces
 │   ├── probe_ui_state.py       what the interface API does and does not expose
-│   │                           (diagnostic, not part of a release run)
+│   ├── probe_property.py       where a setting actually lives in the scene RNA
+│   │                           (both diagnostic, not part of a release run)
 │   ├── run.ps1                 THE ENTRY POINT -- the steps, one per run
 │   └── new-release.ps1         release helper (PowerShell)
 ├── _CLAUDE_\                   HANDOFF, WORKFLOW, VibeCoding .docx — git-ignored
