@@ -127,18 +127,17 @@ if not found:
 for idname in found:
     out("    bpy.ops.%s" % idname)
     try:
-        rna = getattr(bpy.types, idname.replace(".", "_").upper(), None)
-        if rna is None:
-            # Operator RNA is named e.g. SCENE_OT_something
-            module_name, op_name = idname.split(".")
-            rna = getattr(bpy.types, "%s_OT_%s" % (module_name.upper(), op_name), None)
-        if rna is None:
-            out("      (RNA not found -- call it with a wrong argument to see"
-                " its signature)")
-            continue
-        out("      label: %r" % getattr(rna.bl_rna, "name", "?"))
-        out("      description: %r" % getattr(rna.bl_rna, "description", "?"))
-        for prop in rna.bl_rna.properties:
+        # get_rna_type() is the route that works. Looking the operator up in
+        # bpy.types as WM_OT_name only finds operators registered from Python;
+        # the ones built into Blender are not all there, and set_working_color_space
+        # is one of those -- which is why the first run of this probe reported
+        # "RNA not found" for the one operator that mattered.
+        module_name, op_name = idname.split(".")
+        rna = getattr(bpy.ops, module_name)
+        rna = getattr(rna, op_name).get_rna_type()
+        out("      label: %r" % getattr(rna, "name", "?"))
+        out("      description: %r" % getattr(rna, "description", "?"))
+        for prop in rna.properties:
             if prop.identifier in ("rna_type",):
                 continue
             line = "      arg %-28s %s" % (prop.identifier, prop.type)
@@ -157,20 +156,37 @@ for idname in found:
         out("      unreadable: %s" % exc)
 
 # --- 3. what the enum offers --------------------------------------------------
-# Whatever holds the working space, its options are the list in the dialog.
-out("\n  every enum anywhere on bpy.data that offers ACEScg:")
-try:
-    for prop in bpy.data.bl_rna.properties:
+# The options are the list in the dialog, and they are the only strings the
+# operator will accept. The working space sits on bpy.data.colorspace, one
+# pointer down, so a scan of bpy.data's own properties finds nothing -- descend.
+out("\n  enums on bpy.data and one level below, with their options:")
+def dump_enums(owner, label):
+    try:
+        props = owner.bl_rna.properties
+    except Exception:
+        return
+    for prop in props:
+        if prop.identifier == "rna_type":
+            continue
+        if prop.type == 'POINTER':
+            try:
+                value = getattr(owner, prop.identifier)
+            except Exception:
+                continue
+            if value is not None:
+                dump_enums(value, "%s.%s" % (label, prop.identifier))
+            continue
         if prop.type != 'ENUM':
             continue
         try:
             items = [item.identifier for item in prop.enum_items]
         except Exception:
-            continue
-        if any("aces" in i.lower() for i in items):
-            out("    bpy.data.%-30s %s" % (prop.identifier, items))
-except Exception as exc:
-    out("    unreadable: %s" % exc)
+            items = ["<unreadable>"]
+        out("    %s.%s%s" % (label, prop.identifier,
+                             "" if prop.is_readonly else "  [writable]"))
+        out("      %s" % (items,))
+
+dump_enums(bpy.data, "bpy.data")
 
 out("\n" + BAR + "\n")
 
