@@ -77,6 +77,19 @@ SCENE_PROP_ORDER = (
     ("display_settings", "display_device"),
     ("view_settings", "view_transform"),
     ("view_settings", "look"),
+    # The output format is the same kind of chain. media_type decides which
+    # file formats exist at all: while it is still IMAGE the enum holds
+    # ('AVIF', 'JPEG', 'OPEN_EXR', 'PNG', ...) and no OPEN_EXR_MULTILAYER, so
+    # writing file_format first is refused -- caught, logged as "skipped", and
+    # the scene keeps the wrong format. Written alphabetically that is exactly
+    # the order it happened in: color_depth, exr_codec, file_format, ...,
+    # media_type. Depth, codec and the colour space in turn depend on the
+    # format, so they follow it.
+    ("render.image_settings", "media_type"),
+    ("render.image_settings", "file_format"),
+    ("render.image_settings", "color_depth"),
+    ("render.image_settings", "exr_codec"),
+    ("render.image_settings", "linear_colorspace_settings"),
 )
 # These look like plain strings in a snapshot, but they are structs carrying a
 # .name -- the dump records the name, so the value reads like a string. Writing

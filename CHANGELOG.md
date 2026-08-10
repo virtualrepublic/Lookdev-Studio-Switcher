@@ -43,6 +43,14 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
   text block and read it.
 
 ### Fixed
+- **The output format now actually lands.** `render.image_settings.file_format`
+  was written while `media_type` was still `IMAGE`, and in that state the enum
+  holds no `OPEN_EXR_MULTILAYER` — so Blender refused it, the generated
+  `try/except` caught it, and the run logged *"skipped"* while the scene kept
+  the wrong format. Alphabetical order put `media_type` last, after everything
+  that depends on it. The output settings now follow the same explicit chain
+  the colour management already had: media type, then format, then depth, codec
+  and colour space.
 - **A compositor node deleted in the reworked scene is now deleted at the user's
   end too.** The generator only ever added and changed; a `removed` entry went
   into the TODO block and the node stayed behind, so a converted scene kept a
