@@ -1,12 +1,14 @@
 # CLAUDE.md
 
 Entry point for Claude Code working in this repository. Read this first, then
-the private notes in `_CLAUDE_/` — `HANDOFF.md` (design history) and
-`WORKFLOW.md` (update procedure) — and `docs/` for the published reference.
+`docs/MAINTAINING.md` — the maintainer document, which carries the measurement
+behind every rule listed here. `_CLAUDE_/WORKFLOW.md` holds what is true only on
+this machine: which scene sits on which drive, and the order to work in.
 
 This file lives at the **repository root** (next to `README.md`) — Claude Code
-reads it automatically from there. `HANDOFF.md` and `WORKFLOW.md` stay in
-`_CLAUDE_/`, which is git-ignored: private notes, never pushed.
+reads it automatically from there. `_CLAUDE_/` is git-ignored: local notes,
+never pushed. `HANDOFF.md` there is a retired stub; its content moved into
+`docs/MAINTAINING.md` so that a clone carries it too.
 
 ---
 
@@ -100,10 +102,11 @@ Lookdev-Studio-Switcher\
 │   │                           GUI only; a background Blender holds no workspaces
 │   ├── probe_ui_state.py       what the interface API does and does not expose
 │   ├── probe_property.py       where a setting actually lives in the scene RNA
-│   │                           (both diagnostic, not part of a release run)
+│   ├── probe_working_space.py  the blend file's colour space, and its operator
+│   │                           (all three diagnostic, not part of a release run)
 │   ├── run.ps1                 THE ENTRY POINT -- the steps, one per run
 │   └── new-release.ps1         release helper (PowerShell)
-├── _CLAUDE_\                   HANDOFF, WORKFLOW, VibeCoding .docx — git-ignored
+├── _CLAUDE_\                   WORKFLOW (local steps), VibeCoding .docx — git-ignored
 ├── _BACKUP_\                   V000, V100, _notes, v1.0.0 zip — git-ignored
 └── _local\                     the .blend scenes and diff output — git-ignored
 ```
@@ -127,7 +130,7 @@ instructions. `*.blend` is git-ignored so the scene cannot leak in.
 
 Author: Prof. Michael Klein <professor@virtualrepublic.org>.
 Licence: GPL-3.0-or-later (`bpy` add-ons are derivative works of Blender).
-Current release: `v1.2.3` (tag present).
+Current release: `v1.3.0` (tag present, asset uploaded).
 
 ---
 
@@ -203,7 +206,11 @@ Scene change → release notes must say **existing users have to reconvert**.
 
 ---
 
-## Hard-won rules (full reasoning in the HANDOFF notes)
+## Hard-won rules (full reasoning in `docs/MAINTAINING.md`)
+
+Each of these is the short form. `docs/MAINTAINING.md` carries the measurement
+behind it and travels with a clone; this list does not repeat it.
+
 
 - **Paths are tuples, not dotted strings** — Blender names contain dots.
 - **Modifiers/constraints keyed by name**, with an `index` for stack order.
@@ -277,8 +284,8 @@ Scene change → release notes must say **existing users have to reconvert**.
 ## Verifying generator changes
 
 No Blender here. Generator bugs were caught by **writing a fake `bpy` and
-executing the generated code against it** — every bug in the HANDOFF table, not
-by reading. Keep doing that.
+executing the generated code against it** — every bug in the table in
+`docs/MAINTAINING.md`, not by reading. Keep doing that.
 
 ---
 
@@ -293,9 +300,10 @@ by reading. Keep doing that.
 - **`tools\` and `docs\MAINTAINING.md` are now public.** Earlier the intent was
   to keep the toolchain private. Publishing it is a fine choice — it makes the
   copyright argument transparent — but confirm it was intentional, not accidental.
-- **Handoff notes now live in `_CLAUDE_\`** — `HANDOFF.md` and
-  `WORKFLOW.md`, git-ignored (private). `CLAUDE.md` sits at the repo root and is
-  tracked, so Claude Code loads it automatically. (Resolved.)
+- **The maintainer documentation is consolidated** — `docs/MAINTAINING.md` is
+  the one versioned document; `_CLAUDE_/WORKFLOW.md` keeps only what is local to
+  this machine, and `HANDOFF.md` is a retired stub. Four copies of the same
+  design note had already drifted apart. (Resolved 2026-08-11.)
 - **`CHANGELOG.md` exists** — keep it in step with each release and the tags.
 
 ---
