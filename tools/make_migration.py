@@ -1106,8 +1106,26 @@ def _install_workspace():
         _ws_collapse_outliners(window)
     return
 
+def _ws_collapse_all_levels():
+    """One level per call; a lookdev scene is nowhere near this deep."""
+    for _ in range(12):
+        bpy.ops.outliner.show_one_level(open=False)
+
+
+# What to do in each kind of area once the interface is in place. None of this
+# reproduces the source file's view -- that state cannot be read or written.
+# These are the deterministic equivalents the API does offer, and they are much
+# closer than what an appended workspace arrives with: outliners unfolded to
+# every material, node trees parked wherever the region happened to sit.
+_WS_TIDY = {
+    'OUTLINER': _ws_collapse_all_levels,
+    'NODE_EDITOR': lambda: bpy.ops.node.view_all(),
+    'IMAGE_EDITOR': lambda: bpy.ops.image.view_all(fit_view=True),
+}
+
+
 def _ws_collapse_outliners(window):
-    """Collapse the outliners in every installed workspace.
+    """Tidy every installed workspace: collapse outliners, frame node trees.
 
     NOT a copy of the source file's state -- that cannot be read or written.
     SpaceOutliner exposes no treestore, tree, expanded, open or state; the
@@ -1122,7 +1140,7 @@ def _ws_collapse_outliners(window):
     script's own operator has long finished by then.
     """
     if window is None:
-        _ws_log("  no window -- outliners left as they are")
+        _ws_log("  no window -- the interface is left as it is")
         _ws_write_log()
         return
 
@@ -1138,10 +1156,12 @@ def _ws_collapse_outliners(window):
                     window.workspace = started_on
                 except Exception:
                     pass
-            _ws_log("  outliners collapsed in %%d workspace(s)" %% state["done"])
-            _ws_log("  (the source file's exact expansion cannot be carried --")
-            _ws_log("   SpaceOutliner exposes nothing about it. This is the")
-            _ws_log("   closest the API allows.)")
+            _ws_log("  tidied %%d area(s): outliners collapsed, views framed" %% state["done"])
+            _ws_log("  (the source file's exact view cannot be carried: the")
+            _ws_log("   outliner exposes nothing about expansion, and a region's")
+            _ws_log("   pan and zoom are rebuilt on load. Collapsed and framed")
+            _ws_log("   is the closest the API allows -- an approximation, not")
+            _ws_log("   a copy.)")
             _ws_write_log()
             return None
 
@@ -1162,17 +1182,26 @@ def _ws_collapse_outliners(window):
 
         screen = getattr(window, "screen", None)
         for area in getattr(screen, "areas", []):
-            if area.type != 'OUTLINER':
+            job = _WS_TIDY.get(area.type)
+            if job is None:
+                continue
+            # The override needs the REGION, not just the area: these operators
+            # poll on the region type and answer "Expected an Outliner region"
+            # when only the area is set. That is what left every outliner open.
+            region = None
+            for candidate in area.regions:
+                if candidate.type == 'WINDOW':
+                    region = candidate
+                    break
+            if region is None:
                 continue
             try:
-                with bpy.context.temp_override(window=window, area=area):
-                    # One level per call; a lookdev scene is nowhere near this
-                    # deep, so this reaches the top.
-                    for _ in range(12):
-                        bpy.ops.outliner.show_one_level(open=False)
+                with bpy.context.temp_override(window=window, area=area,
+                                               region=region):
+                    job()
                 state["done"] += 1
             except Exception as exc:
-                _ws_log("      outliner in '%%s': %%s" %% (ws.name, exc))
+                _ws_log("      %%s in '%%s': %%s" %% (area.type, ws.name, exc))
         state["switched"] = False
         state["i"] += 1
         return 0.05
