@@ -1,5 +1,5 @@
 # ============================================================================
-#  EXPORT WORKSPACE  v1.1
+#  EXPORT WORKSPACE  v2.0
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -7,33 +7,35 @@
 #  Copyright (C) 2026  Prof. Michael Klein
 #  SPDX-License-Identifier: GPL-3.0-or-later
 # ============================================================================
-#  Writes ONE workspace to its own .blend, and reports what that costs if it
-#  is to be embedded in the generated installer.
+#  Writes the interface state of this .blend -- its workspaces -- to a .blend
+#  of its own, for the generator to embed. Nothing has to be renamed or set up
+#  first: what is exported is what you see.
 #
-#  Blender stores the interface in the .blend, so a layout can be handed to
+#  Blender keeps the interface in the .blend, so a layout can be handed to
 #  users -- but not through the diff. dump_scene.py records no interface data,
 #  and the generator could not rebuild one anyway: the Python API has no way
 #  to create areas, only bpy.ops.screen.area_split, which needs a real window.
-#  The route that does work is to append a finished workspace from a .blend.
+#  The route that does work is to append finished workspaces from a .blend.
 #
-#  What travels: measured, not assumed. bpy.data.libraries.write() with a
-#  single workspace pulls in its screens and nothing else -- no objects, no
-#  meshes, no materials, no images, no scenes. Nothing of the original
-#  author's work is redistributed.
+#  At the user's end the installer REPLACES a workspace of the same name
+#  rather than adding a duplicate -- Blender would otherwise call the appended
+#  one "Layout.001". So the converted file ends up with your interface.
 #
-#  HOW TO RUN -- from the GUI, not with --background. A background Blender may
-#  hold no workspaces at all, and then there is nothing to export.
+#  What travels: measured, not assumed. bpy.data.libraries.write() with
+#  workspaces pulls in their screens and nothing else -- no objects, meshes,
+#  materials, images or scenes. Nothing of the original author's work is
+#  redistributed. The report below lists exactly what went into the file, and
+#  says plainly when something other than interface data appears.
 #
-#    1. Open the .blend whose interface you want to ship.
-#    2. Make sure a workspace TAB named exactly "Lookdev" exists. The quickest
-#       way: right-click the tab you like -> Duplicate, then double-click the
-#       copy and rename it to Lookdev. Shipping it under its own name matters:
-#       appending a "Layout" onto a user who already has one makes Blender
-#       call it "Layout.001".
-#    3. Scripting workspace -> Open -> this file -> Run Script.
+#  HOW TO RUN -- from the GUI, not with --background. A background Blender
+#  holds no workspaces, so there would be nothing to export.
 #
-#  Everything printed also goes to a log file, so nothing is lost in the
-#  hidden system console. The log tells you where it landed.
+#    1. Open the .blend whose interface you want to ship, arranged the way you
+#       want your users to receive it.
+#    2. Scripting workspace -> Open -> this file -> Run Script.
+#
+#  Everything printed also goes to export_workspace.log.txt, so nothing is
+#  lost in the hidden system console.
 # ============================================================================
 
 import bpy
@@ -41,11 +43,16 @@ import os
 import sys
 import zlib
 import base64
+import hashlib
 import tempfile
 
 # --- edit these when running from the Text editor -----------------------------
-WORKSPACE = "Lookdev"          # name of the workspace tab to export
-OUTPUT    = ""                 # empty = _local\workspace_<name>.blend
+# Empty list = every workspace in the file. Name them to ship only some, e.g.
+#     WORKSPACES = ["Layout", "Shading"]
+# Fewer workspaces means a smaller blob in the installer; the report shows what
+# each one costs.
+WORKSPACES = []
+OUTPUT     = ""                # empty = _local\workspace_ui.blend
 # ------------------------------------------------------------------------------
 
 BAR = "=" * 74
@@ -58,23 +65,25 @@ def out(text=""):
 
 
 def parse_args():
-    global WORKSPACE, OUTPUT
+    global WORKSPACES, OUTPUT
     if "--" not in sys.argv:
         return
     argv = sys.argv[sys.argv.index("--") + 1:]
     import argparse
     parser = argparse.ArgumentParser(prog="export_workspace.py")
-    parser.add_argument("--workspace", default=WORKSPACE)
+    parser.add_argument("--workspace", action="append", default=None,
+                        help="repeatable; default is every workspace")
     parser.add_argument("-o", "--out", default=OUTPUT)
     args = parser.parse_args(argv)
-    WORKSPACE, OUTPUT = args.workspace, args.out
+    WORKSPACES = args.workspace or []
+    OUTPUT = args.out
 
 
 def local_folder():
     """_local\\ is the folder holding run.ps1; walk up from the open .blend.
 
-    Returns (folder, how_it_was_found) so the log can say why it chose that
-    place -- a file written somewhere unexpected is the same as no file.
+    Returns (folder, why) so the log can say how it chose -- a file written
+    somewhere unexpected is as good as no file at all.
     """
     blend = bpy.data.filepath
     if not blend:
@@ -92,7 +101,6 @@ def local_folder():
 
 
 def write_log():
-    """Log next to the .blend and, when they differ, in _local\\ as well."""
     written = []
     targets = []
     folder, _why = local_folder()
@@ -117,17 +125,14 @@ def main():
     parse_args()
 
     out("\n" + BAR)
-    out("  EXPORT WORKSPACE")
+    out("  EXPORT WORKSPACE -- the interface state of this file")
     out(BAR)
     out("  background mode : %s" % bpy.app.background)
     out("  open file       : %s" % (bpy.data.filepath or "<unsaved>"))
     out("  workspaces here : %d" % len(bpy.data.workspaces))
-    out("  looking for     : '%s'" % WORKSPACE)
 
     folder, why = local_folder()
-    target = OUTPUT or os.path.join(
-        folder, "workspace_%s.blend" % WORKSPACE.lower().replace(" ", "_"))
-    target = os.path.abspath(target)
+    target = os.path.abspath(OUTPUT or os.path.join(folder, "workspace_ui.blend"))
     out("  would write to  : %s" % target)
     out("                    (%s)" % why)
 
@@ -137,36 +142,43 @@ def main():
         out(BAR)
         return
 
-    ws = bpy.data.workspaces.get(WORKSPACE)
-    if ws is None:
-        out("\n  NOTHING WRITTEN -- there is no workspace tab named '%s'." % WORKSPACE)
-        out("\n  This file has:")
-        for other in bpy.data.workspaces:
-            out("      %s" % other.name)
-        out("\n  Create it: right-click the tab you want to ship -> Duplicate,")
-        out("  then double-click the copy and rename it to '%s'." % WORKSPACE)
-        out("  Shipping it under its own name matters -- appending a 'Layout'")
-        out("  onto a user who already has one makes Blender call it 'Layout.001'.")
-        out("\n  Or export a different tab: set WORKSPACE at the top of this file.")
-        out(BAR)
-        return
+    if WORKSPACES:
+        chosen, missing = [], []
+        for name in WORKSPACES:
+            ws = bpy.data.workspaces.get(name)
+            (chosen if ws is not None else missing).append(ws if ws else name)
+        if missing:
+            out("\n  NOTHING WRITTEN -- no workspace named: %s" % ", ".join(missing))
+            out("\n  This file has:")
+            for other in bpy.data.workspaces:
+                out("      %s" % other.name)
+            out("\n  Fix the WORKSPACES list at the top of this file, or leave it")
+            out("  empty to export every workspace.")
+            out(BAR)
+            return
+    else:
+        chosen = list(bpy.data.workspaces)
+        out("  exporting       : all of them (WORKSPACES is empty)")
 
-    out("\n  workspace '%s'  --  %d screen(s)" % (ws.name, len(ws.screens)))
-    for screen in ws.screens:
-        out("      screen '%s': %s" % (
-            screen.name, ", ".join(a.type for a in screen.areas)))
+    out("")
+    for ws in chosen:
+        areas = []
+        for screen in ws.screens:
+            areas.extend(a.type for a in screen.areas)
+        out("      %-16s %d screen(s): %s" % (ws.name, len(ws.screens),
+                                              ", ".join(areas)))
 
     try:
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        bpy.data.libraries.write(target, {ws}, fake_user=True)
+        bpy.data.libraries.write(target, set(chosen), fake_user=True)
     except Exception as exc:
         out("\n  FAILED to write %s" % target)
         out("      %s" % exc)
         out(BAR)
         return
 
-    # Prove that nothing but interface data went in. Anything under objects,
-    # meshes, materials, images or scenes means the file must NOT be shipped.
+    # Anything beyond workspaces/screens means scene data followed the export.
+    # That would be the original author's, and must not be redistributed.
     out("\n  contents of the written file:")
     clean = True
     with bpy.data.libraries.load(target) as (src, _dst):
@@ -176,26 +188,35 @@ def main():
             names = list(getattr(src, kind, []))
             if not names:
                 continue
-            out("      %-12s %2d  %s" % (kind, len(names), ", ".join(names[:5])))
+            shown = ", ".join(names[:6])
+            more = "" if len(names) <= 6 else " ... +%d" % (len(names) - 6)
+            out("      %-12s %2d  %s%s" % (kind, len(names), shown, more))
             if kind not in ("workspaces", "screens"):
                 clean = False
 
     raw = open(target, "rb").read()
     packed = base64.b64encode(zlib.compress(raw, 9))
+    stamp = hashlib.sha256(raw).hexdigest()[:16]
     out("\n  %-30s %8.0f KB" % ("written", len(raw) / 1024.0))
     out("  %-30s %8.0f KB   <- cost of embedding it" % (
         "zlib + base64", len(packed) / 1024.0))
-
     installer = os.path.join(os.path.dirname(folder), "setup_lookdev_scene.py")
     if os.path.isfile(installer):
         now = os.path.getsize(installer) / 1024.0
         out("  %-30s %8.0f KB  ->  %.0f KB" % (
             "setup_lookdev_scene.py", now, now + len(packed) / 1024.0))
+    out("  %-30s %s" % ("stamp", stamp))
 
     out("")
     if clean:
         out("  INTERFACE DATA ONLY -- safe to ship.")
         out("  Next: RUN.cmd -> 4. It picks the file up automatically.")
+        if len(chosen) > 3:
+            out("")
+            out("  Shipping %d workspaces. If the blob is heavier than you want,"
+                % len(chosen))
+            out("  set WORKSPACES at the top of this file to just the ones you")
+            out("  actually changed and run it again.")
     else:
         out("  !! SCENE DATA CAME ALONG -- do not ship this file.")
     out("  %s" % target)

@@ -40,6 +40,7 @@ import sys
 import os
 import zlib
 import base64
+import hashlib
 
 # Import compare_scenes from THIS script's folder, not from the current
 # directory -- so it works no matter where the terminal happens to stand.
@@ -857,7 +858,7 @@ def install_tool():
 
 WORKSPACE_BLOCK = '''
 # ============================================================================
-#  EMBEDDED WORKSPACE -- %s
+#  EMBEDDED INTERFACE -- the workspaces of the source file
 # ============================================================================
 #  Blender keeps the interface in the .blend, so a layout can be handed over --
 #  but not through the diff. dump_scene.py records no interface data, and the
@@ -875,38 +876,87 @@ WORKSPACE_BLOCK = '''
 #  you can rearrange or delete this one like any other.
 # ============================================================================
 
-WORKSPACE_NAME = %r
+WORKSPACE_STAMP = %r
 
 WORKSPACE_BLEND = (
 %s)
 
 
 def install_workspace():
-    """Append the workspace as a new tab. Never replaces one the file has."""
+    """Put the interface from the source file into this one.
+
+    A workspace of the same name is REPLACED, not duplicated: appending a
+    "Layout" onto a file that already has one makes Blender call the new one
+    "Layout.001", and the user would end up with two tabs of the same name.
+
+    The stamp makes this idempotent -- run the script twice and the second run
+    finds the interface already at this version and does nothing. A later
+    release with a changed layout carries a different stamp and replaces it.
+    """
     import base64
     import zlib
     import tempfile
 
-    if bpy.data.workspaces.get(WORKSPACE_NAME) is not None:
-        log("workspace '%%s' is already here -- kept as it is" %% WORKSPACE_NAME)
-        print("    (to take a newer layout, delete that tab and run this again)")
-        return
+    for existing in bpy.data.workspaces:
+        if existing.get("lookdev_ui") == WORKSPACE_STAMP:
+            log("interface already at this version -- left alone")
+            return
 
-    tmp = os.path.join(tempfile.gettempdir(),
-                       "lookdev_workspace_%%d.blend" %% os.getpid())
+    tmp = os.path.join(tempfile.gettempdir(), "lookdev_ui_%%d.blend" %% os.getpid())
+    wanted, loaded = [], []
     try:
         with open(tmp, "wb") as handle:
             handle.write(zlib.decompress(base64.b64decode(WORKSPACE_BLEND)))
-        bpy.ops.workspace.append_activate(idname=WORKSPACE_NAME, filepath=tmp)
-        log("workspace '%%s' added -- see the new tab at the top" %% WORKSPACE_NAME)
+        # load() appends and reports the names as they are in the source file,
+        # which is what tells us who replaces whom.
+        with bpy.data.libraries.load(tmp) as (src, dst):
+            wanted = list(src.workspaces)
+            dst.workspaces = wanted
+        loaded = [ws for ws in dst.workspaces if ws is not None]
     except Exception as exc:
-        print("  ! could not add the workspace '%%s': %%s" %% (WORKSPACE_NAME, exc))
+        print("  ! could not read the embedded interface: %%s" %% exc)
         print("    Everything else was applied -- only the layout is missing.")
+        return
     finally:
         try:
             os.remove(tmp)
         except Exception:
             pass
+
+    if len(loaded) != len(wanted):
+        print("  ! %%d of %%d workspaces came through; leaving names as they are"
+              %% (len(loaded), len(wanted)))
+        for ws in loaded:
+            ws["lookdev_ui"] = WORKSPACE_STAMP
+        return
+
+    # Stand on one of the new ones first: the workspace being removed must not
+    # be the one the window is showing.
+    window = getattr(bpy.context, "window", None)
+    if window is not None and loaded:
+        try:
+            window.workspace = loaded[0]
+        except Exception:
+            pass
+
+    for name, ws in zip(wanted, loaded):
+        ws["lookdev_ui"] = WORKSPACE_STAMP
+        if ws.name == name:
+            log("workspace '%%s' added" %% name)
+            continue
+        old = bpy.data.workspaces.get(name)
+        if old is not None and old != ws:
+            try:
+                bpy.data.workspaces.remove(old)
+            except Exception as exc:
+                print("  ! kept the existing '%%s' (%%s); the new one stays '%%s'"
+                      %% (name, exc, ws.name))
+                continue
+        try:
+            ws.name = name
+            log("workspace '%%s' replaced" %% name)
+        except Exception as exc:
+            print("  ! could not rename '%%s' to '%%s': %%s" %% (ws.name, name, exc))
 '''
 
 FOOTER = '''
@@ -936,7 +986,7 @@ def read_tool(path):
     return source
 
 
-def read_workspace(path, name):
+def read_workspace(path):
     """Read a workspace .blend and return it as chunked base64 source lines.
 
     Compressed first: a .blend written by libraries.write() is uncompressed, and
@@ -946,26 +996,21 @@ def read_workspace(path, name):
     with open(path, "rb") as handle:
         raw = handle.read()
 
-    # The name is what append_activate() asks for at the user's end. It cannot be
-    # verified without Blender, but a .blend stores datablock names as plain
-    # strings, so a missing name here means the export and the -o name disagree.
-    if name.encode("utf-8") not in raw:
-        print("  ! WARNING: '%s' does not appear in %s." % (name, path))
-        print("    The generated script will ask Blender for a workspace of that")
-        print("    name and get nothing. Check --workspace-name against the name")
-        print("    you exported.")
-
+    # The workspace names are not needed here: the generated code reads them
+    # from the file itself via libraries.load(), which is also what tells it
+    # which existing workspace each one replaces.
+    stamp = hashlib.sha256(raw).hexdigest()[:16]
     packed = base64.b64encode(zlib.compress(raw, 9)).decode("ascii")
     chunks = [packed[i:i + 76] for i in range(0, len(packed), 76)]
     lines = "".join('    "%s"\n' % chunk for chunk in chunks)
-    print("  workspace '%s': %.0f KB -> %.0f KB embedded (%.0f%%)"
-          % (name, len(raw) / 1024.0, len(packed) / 1024.0,
-             100.0 * len(packed) / len(raw)))
-    return lines
+    print("  interface: %.0f KB -> %.0f KB embedded (%.0f%%), stamp %s"
+          % (len(raw) / 1024.0, len(packed) / 1024.0,
+             100.0 * len(packed) / len(raw), stamp))
+    return stamp, lines
 
 
 def render(em, before, after, tool_name=None, tool_source=None, self_name=None,
-           workspace_name=None, workspace_data=None):
+           workspace_stamp=None, workspace_data=None):
     out = [HEADER % (before.get("blend_file") or "original",
                      after.get("blend_file") or "modified")]
 
@@ -975,7 +1020,7 @@ def render(em, before, after, tool_name=None, tool_source=None, self_name=None,
     if tool_source is not None:
         out.append(SWITCHER_BLOCK % (tool_name, tool_name, tool_source))
     if workspace_data is not None:
-        out.append(WORKSPACE_BLOCK % (workspace_name, workspace_name, workspace_data))
+        out.append(WORKSPACE_BLOCK % (workspace_stamp, workspace_data))
     if self_name:
         out.append(SELF_REMOVE_BLOCK % self_name)
 
@@ -1024,14 +1069,12 @@ def main():
                              "generated script: it is installed into the .blend "
                              "as a text block with Register enabled")
     parser.add_argument("--workspace", default=None, metavar="PATH",
-                        help="embed this workspace .blend (from "
+                        help="embed this interface .blend (from "
                              "tools/export_workspace.py) so the generated script "
-                             "adds the layout as a new tab. Optional: without it "
-                             "the script simply carries no workspace")
-    parser.add_argument("--workspace-name", default="Lookdev", metavar="NAME",
-                        help="name of the workspace inside that .blend, which is "
-                             "what Blender is asked for when appending "
-                             "(default: Lookdev)")
+                             "carries the workspaces. A workspace of the same "
+                             "name at the user end is replaced, not duplicated. "
+                             "Optional: without it the script carries no layout")
+
 
     # Works standalone and under Blender's bundled interpreter
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
@@ -1046,18 +1089,18 @@ def main():
         tool_name = os.path.basename(args.switcher)
         tool_source = read_tool(args.switcher)
 
-    workspace_data = None
+    workspace_stamp = workspace_data = None
     if args.workspace:
         if not os.path.isfile(args.workspace):
             raise SystemExit("Workspace file not found: %s\n"
                              "Export it first with tools/export_workspace.py, or "
                              "leave --workspace off." % args.workspace)
-        workspace_data = read_workspace(args.workspace, args.workspace_name)
+        workspace_stamp, workspace_data = read_workspace(args.workspace)
 
     with open(args.out, "w", encoding="utf-8") as handle:
         handle.write(render(em, before, after, tool_name, tool_source,
                             self_name=os.path.basename(args.out),
-                            workspace_name=args.workspace_name,
+                            workspace_stamp=workspace_stamp,
                             workspace_data=workspace_data))
 
     print("Wrote %s" % args.out)
@@ -1066,7 +1109,7 @@ def main():
         print("  embedded tool: %s (%d lines)"
               % (tool_name, tool_source.count("\n") + 1))
     if workspace_data:
-        print("  embedded workspace: %s" % args.workspace_name)
+        print("  embedded interface: stamp %s" % workspace_stamp)
     todo_count = len([l for l in em.todo if l.startswith("#   ")])
     print("  %d item(s) left for you to decide" % todo_count)
     if em.todo:
