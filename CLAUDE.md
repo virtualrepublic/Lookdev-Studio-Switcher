@@ -29,10 +29,21 @@ Lookdev-Studio-Switcher\               ← THE REPOSITORY (its own .git)
     │       ├── LOOKDEV_STUDIO_ORIGINAL_520.blend   left side of the diff   [read-only]
     │       └── LOOKDEV_STUDIO_MODIFIED_520.blend   right side — THE MASTER
     ├── snap_original.json / snap_modified.json   diff snapshots (regenerated)
+    ├── workspace_ui.blend             the exported interface, an INPUT to the
+    │                                  generator like the snapshots and the
+    │                                  switcher — overwrite it when the layout
+    │                                  changes, every generation re-reads it
     ├── Report\                        diff reports, history
     ├── RUN.cmd                        double-click starter
     └── run.ps1                        the toolchain, one step per run
 ```
+
+**Three inputs feed the installer, and each has gone stale unnoticed at least
+once:** the snapshots (a saved scene or a changed `dump_scene.py` invalidates
+them), `lookdev_switcher.py` (the version has to be bumped before generating),
+and `workspace_ui.blend` (exporting *after* generating ships the previous
+layout — that one has happened three times). `run.ps1` now refuses on the first
+and the third; the release script refuses on the second.
 
 **Three scenes, three roles — do not conflate them:**
 
@@ -82,10 +93,14 @@ Lookdev-Studio-Switcher\
 │   ├── MAINTAINING.md          maintainer notes
 │   └── images\                 13 screenshots, all present
 ├── tools\                      the toolchain
-│   ├── dump_scene.py
-│   ├── compare_scenes.py
-│   ├── diff_blends.py
-│   ├── make_migration.py
+│   ├── dump_scene.py           snapshot one .blend
+│   ├── compare_scenes.py       diff two snapshots
+│   ├── diff_blends.py          drives both, writes the snapshots
+│   ├── make_migration.py       snapshots + switcher + interface -> installer
+│   ├── export_workspace.py     the interface of a .blend -> _local\workspace_ui.blend
+│   │                           GUI only; a background Blender holds no workspaces
+│   ├── probe_ui_state.py       what the interface API does and does not expose
+│   │                           (diagnostic, not part of a release run)
 │   └── new-release.ps1         release helper (PowerShell)
 ├── _CLAUDE_\                   HANDOFF, WORKFLOW, VibeCoding .docx — git-ignored
 ├── _BACKUP_\                   V000, V100, _notes, v1.0.0 zip — git-ignored
