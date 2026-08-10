@@ -43,7 +43,7 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
   text block and read it.
 
 ### Fixed
-- **A compositor node deleted in the reworked scene is now deleted at the user''s
+- **A compositor node deleted in the reworked scene is now deleted at the user's
   end too.** The generator only ever added and changed; a `removed` entry went
   into the TODO block and the node stayed behind, so a converted scene kept a
   node the master had not had for months. It is the only step in the migration
