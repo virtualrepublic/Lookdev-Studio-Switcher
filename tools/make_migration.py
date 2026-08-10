@@ -434,6 +434,30 @@ def gen_compositor_node(em, name, data):
     return True
 
 
+def gen_compositor_node_removed(em, name):
+    """Remove a compositor node the original has and the reworked scene does not.
+
+    The only step in the whole migration that takes something away, so it is
+    narrow on purpose. A "removed" entry means the node was in the ORIGINAL
+    snapshot: it is part of what the author ships, not something the user built.
+    Anything the user added themselves appears in neither snapshot and is never
+    named here, so it cannot be caught by this.
+
+    If the node is already gone -- renamed, deleted by hand, a scene converted
+    twice -- get() returns None and nothing happens, which is also what makes a
+    second run report no changes.
+    """
+    em.step("compositor_nodes", [
+        'tree = compositor_tree(scene)',
+        'node = tree.nodes.get(%s) if tree else None' % lit(name),
+        'if node is not None:',
+        '    tree.nodes.remove(node)',
+        '    ' + log_line("compositor node %s removed -- not in the reworked scene"
+                          % name),
+    ], "compositor node removed: %s" % name)
+    return True
+
+
 def gen_compositor_node_prop(em, name, prop, new):
     if prop not in ("location", "label", "mute"):
         return False
@@ -557,6 +581,10 @@ def build(before, after, changes):
         if (head == "scenes" and len(path) == 5 and path[2] == "compositor"
                 and path[3] == "nodes" and kind == "added"):
             if gen_compositor_node(em, path[4], new):
+                continue
+        if (head == "scenes" and len(path) == 5 and path[2] == "compositor"
+                and path[3] == "nodes" and kind == "removed"):
+            if gen_compositor_node_removed(em, path[4]):
                 continue
         if (head == "scenes" and len(path) == 6 and path[2] == "compositor"
                 and path[3] == "nodes" and kind == "changed"):

@@ -43,6 +43,14 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
   text block and read it.
 
 ### Fixed
+- **A compositor node deleted in the reworked scene is now deleted at the user''s
+  end too.** The generator only ever added and changed; a `removed` entry went
+  into the TODO block and the node stayed behind, so a converted scene kept a
+  node the master had not had for months. It is the only step in the migration
+  that takes something away, and it is deliberately narrow: only nodes present
+  in the **original** snapshot are named, so anything a user built themselves is
+  never a candidate. Already gone means nothing happens, which keeps the
+  "run it twice, no changes" property intact.
 - **The file no longer contradicts itself about its version.** The header said
   `LOOKDEV SWITCHER v1.2` while `bl_info` said `(1, 2, 3)`. Since the header is
   the first line anyone reads, an up-to-date file looked stale. Both now carry
