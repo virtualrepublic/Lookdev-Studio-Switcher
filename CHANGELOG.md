@@ -149,6 +149,22 @@ page.
 
 ## [1.2.3] — 2026-08-09
 
+**Imported collections now work with Align & Link Model and FRAME.** A model
+brought in as a linked or instanced collection used to report *"No visible
+geometry found to measure"*. It is measured, centred and rigged like any other
+model now, and FRAME can frame it.
+
+**FRAME no longer cuts off very large models.** The frame camera's clipping
+distance grows to fit the model; smaller models keep the studio camera's
+original range.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+Re-run the current `setup_lookdev_scene.py`, or reload the panel, to pick it up.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
+
 ### Fixed
 - **Align & Link Model** (and **FRAME**) now work on a **collection linked or
   instanced from another scene or file**. Such a collection enters the scene as an
@@ -166,13 +182,24 @@ page.
   with a safety margin — so smaller models keep the studio camera's original
   near/far range.
 
-Panel-only change — the scene is untouched, so **no reconversion is needed**.
-Existing users pick it up by re-running the current `setup_lookdev_scene.py` (or
-reloading the panel).
-
 ---
 
 ## [1.2.2] — 2026-08-09
+
+**The Lookdev panel no longer lingers in unrelated scenes.** After *File → New*,
+or after opening a different file in the same session, the panel used to stay on
+screen until Blender was restarted. It now disappears by itself and comes back
+when you open a Lookdev scene again.
+
+**Running the script a second time is safe** — including with several Lookdev
+files open in one Blender session.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+Re-run the current `setup_lookdev_scene.py`, or reload the panel, to pick it up.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
 
 ### Fixed
 - **The Lookdev panel no longer follows the scene into `File → New`** (or into an
@@ -184,13 +211,20 @@ reloading the panel).
 - Registration is now **idempotent**: re-running the script, or opening a second
   Lookdev file in the same session, no longer risks an "already registered" error.
 
-Panel-only change — the scene is untouched, so **no reconversion is needed**.
-Existing users pick it up by re-running the current `setup_lookdev_scene.py` (or
-reloading the panel).
-
 ---
 
 ## [1.2.1] — 2026-07-20
+
+**Importing a whole collection now lands correctly on the turntable.** The
+collection moves into `MODEL` together with its contents, instead of being
+emptied out object by object and left behind. Individual objects imported
+without a collection behave as before.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
 
 ### Fixed
 - **Auto-collect to MODEL** now handles an imported **collection** correctly.
@@ -202,11 +236,24 @@ reloading the panel).
   parent rather than being flattened. Collections that are only instanced, and
   the rig's own collections, are left untouched.
 
-Panel-only change — the scene is untouched, so **no reconversion is needed**.
-
 ---
 
 ## [1.2.0] — 2026-07-20
+
+**Set Render Path** — a new panel button that sends renders to their own folder
+next to your saved `.blend`, named after the file:
+
+    Render/MyProject/MyProject_0001.exr
+
+Save the project first — the button tells you if you have not, and changes
+nothing until you do.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+Re-run the current `setup_lookdev_scene.py`, or reload the panel, to pick it up.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
 
 ### Added
 - **Set Render Path** — a panel button that points the output at
@@ -217,13 +264,24 @@ Panel-only change — the scene is untouched, so **no reconversion is needed**.
   if the file has never been saved the button reports that and changes nothing,
   since a `//` relative path needs a saved file anyway.
 
-Panel-only change — the scene is untouched, so **no reconversion is needed**.
-Existing users get the button by re-running the current `setup_lookdev_scene.py`
-(or reloading the panel).
-
 ---
 
 ## [1.1.0] — 2026-07-19
+
+**Imported models land on the turntable by themselves.** New geometry moves into
+the `MODEL` collection automatically, so an import is ready to spin without
+dragging it anywhere. Cameras, lights and the rotation empty are left alone, and
+a switch in the panel turns the behaviour off.
+
+**FRAME leaves a margin.** The model fills about 90 % of the frame instead of
+touching the edge, so the silhouette keeps a border as the turntable turns.
+
+Panel-only change — the scene is untouched, so **no reconversion is needed**.
+Re-run the current `setup_lookdev_scene.py`, or reload the panel, to pick it up.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
 
 ### Added
 - **Auto-collect to MODEL** — newly imported or added geometry is moved into the
@@ -241,6 +299,22 @@ Existing users get the button by re-running the current `setup_lookdev_scene.py`
 ---
 
 ## [1.0.2] — 2026-07-19
+
+A render-settings update.
+
+**You have to reconvert.** Run the new `setup_lookdev_scene.py` on a fresh copy
+of the original scene. Re-running it on a file you have already converted
+applies the changed values as well.
+
+- Sampling lowered from **1024 to 512** — noticeably faster renders.
+- Resolution stays at the scene's own 100 % instead of being forced to 200 %.
+- Viewport denoising set to **OpenImageDenoise**.
+- The compositor runs on the graphics card.
+- **Persistent data** is on: quicker re-renders, in exchange for more memory.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
 
 Render-settings update, regenerated from the reworked scene.
 
@@ -263,6 +337,14 @@ Render-settings update, regenerated from the reworked scene.
 ---
 
 ## [1.0.1] — 2026-07-18
+
+Housekeeping only — documentation fixes and repository tidying. Nothing in the
+tool or the installer changed, so there is nothing to download and nothing to
+re-run.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
 
 Housekeeping release — no functional change to the tool or the installer.
 
@@ -289,6 +371,43 @@ Housekeeping release — no functional change to the tool or the installer.
 
 First public release.
 
+## The scene is not included
+
+Free, but not mine — download it from the author:
+
+> albin. (2021, November 10). *Studio Lookdev* [3D model]. CGTrader.
+> https://www.cgtrader.com/free-3d-models/architectural/other/studio-lookdev
+
+`setup_lookdev_scene.py` extends *your* copy. Nothing of the author's work is
+distributed here.
+
+## Setup
+
+Download `setup_lookdev_scene.py`, open it in Blender's Text Editor, press
+**Run Script**, then **Save As** under a new name. Blender 5.2 or newer.
+
+Full instructions: [README](https://github.com/virtualrepublic/Lookdev-Studio-Switcher#readme)
+
+## What you get
+
+Five configuration buttons, depth of field for all cameras at once, and
+one-press turntable rigging for any model you import.
+
+The script also prepares the scene for lookdev work. Two things worth knowing
+before you render: **sampling goes to 1024**, and **output becomes multi-layer
+EXR** rather than PNG. Both can be changed afterwards — the full list is in the
+[reference](https://github.com/virtualrepublic/Lookdev-Studio-Switcher/blob/main/docs/DOCUMENTATION.md#what-the-conversion-changes).
+
+---
+
+**Licence:** GPL-3.0-or-later, tool only. The scene stays under its author's terms.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases page.
+
+First public release.
+
 ### Added
 - `setup_lookdev_scene.py` — one-shot converter that rebuilds the scene,
   installs the Lookdev Switcher, and removes itself.
@@ -308,7 +427,8 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.3...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.0...v1.2.1
