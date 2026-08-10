@@ -158,6 +158,16 @@ function Get-WorkspaceStamps {
 }
 
 function Get-WorkspaceProblem {
+    # An export that landed anywhere but _local\ is invisible to the generator
+    # and to the stamp check -- both look only at _local\workspace_ui.blend. It
+    # happened once: the marker export_workspace.py uses to find _local\ was
+    # run.ps1, and run.ps1 moved to tools\.
+    $stray = Get-ChildItem (Join-Path $Local 'scenes') -Recurse -Filter 'workspace_ui.blend' -ErrorAction SilentlyContinue
+    if ($stray) {
+        return ("an export landed outside _local\: " +
+                ($stray | ForEach-Object { $_.FullName.Replace($Repo, '') }) -join ', ' +
+                " -- move it to _local\workspace_ui.blend or export again")
+    }
     $s = Get-WorkspaceStamps
     if (-not $s.Export -and -not $s.Embedded) { return $null }   # no interface in play
     if (-not $s.Export) {

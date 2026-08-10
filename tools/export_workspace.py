@@ -80,7 +80,12 @@ def parse_args():
 
 
 def local_folder():
-    """_local\\ is the folder holding run.ps1; walk up from the open .blend.
+    """_local\\ is the folder holding RUN.cmd; walk up from the open .blend.
+
+    RUN.cmd, not run.ps1: run.ps1 moved to tools\\ so it would be versioned, and
+    this marker silently stopped matching. The export then landed next to the
+    scene, the generator kept using the previous one, and the stamp guard
+    compared two old files and called it fine.
 
     Returns (folder, why) so the log can say how it chose -- a file written
     somewhere unexpected is as good as no file at all.
@@ -90,14 +95,15 @@ def local_folder():
         return tempfile.gettempdir(), "the .blend is unsaved, so the temp folder"
     folder = os.path.dirname(blend)
     for _ in range(5):
-        if os.path.isfile(os.path.join(folder, "run.ps1")):
-            return folder, "found by the run.ps1 marker"
+        if os.path.isfile(os.path.join(folder, "RUN.cmd")):
+            return folder, "found by the RUN.cmd marker"
         parent = os.path.dirname(folder)
         if parent == folder:
             break
         folder = parent
     return (os.path.dirname(blend),
-            "no run.ps1 above the .blend -- falling back to its own folder")
+            "!! no RUN.cmd above the .blend -- falling back to its own folder, "
+            "so RUN.cmd -> 4 will NOT find this file")
 
 
 def write_log():
