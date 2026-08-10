@@ -52,7 +52,7 @@ def out(text=""):
     _lines.append(text)
 
 
-def walk(owner, path, depth, seen):
+def walk(owner, path, depth, seen, names_too=True):
     """Descend through RNA pointers, reporting matches by value and by name.
 
     Visited paths are tracked by PATH, not by id(). RNA wrappers are created
@@ -79,7 +79,7 @@ def walk(owner, path, depth, seen):
             continue
         if prop.type == 'POINTER':
             if value is not None:
-                walk(value, full, depth + 1, seen)
+                walk(value, full, depth + 1, seen, names_too)
             continue
         if prop.type == 'COLLECTION':
             continue
@@ -88,7 +88,7 @@ def walk(owner, path, depth, seen):
         by_value = text is not None and any(v.lower() == text.lower()
                                             or v.lower() in text.lower()
                                             for v in VALUES)
-        by_name = any(term in full.lower() for term in TERMS)
+        by_name = names_too and any(term in full.lower() for term in TERMS)
         if not (by_value or by_name):
             continue
         mark = "  <== VALUE MATCH" if by_value else ""
@@ -121,9 +121,30 @@ for label, root in (("world", getattr(scene, "world", None) if scene else None),
     if root is None:
         continue
     before = len(_lines)
-    walk(root, label, 1, set())
+    # Only value matches out here: the name net pulled in the entire
+    # preferences tree and buried the one line that mattered.
+    walk(root, label, 1, set(), names_too=False)
     if len(_lines) == before:
         out("  %-56s (nothing)" % label)
+
+# Every image carries its own colour space, and images live in a collection --
+# which the walk skips, because collections are where the geometry is. This is
+# the one collection worth listing by hand: an HDRI or a texture read as the
+# wrong space is exactly the kind of difference that shows up as a "working
+# space" in the interface without being a scene property at all.
+out("\n  colour space of every image datablock:")
+if not bpy.data.images:
+    out("    (no images)")
+for image in bpy.data.images:
+    try:
+        space = image.colorspace_settings.name
+    except Exception as exc:
+        space = "unreadable (%s)" % exc
+    mark = "  <== VALUE MATCH" if any(v.lower() in str(space).lower()
+                                      for v in VALUES) else ""
+    out("    %-44s %-24s %s%s" % (image.name, space,
+                                  "%dx%d" % tuple(image.size) if image.size else "",
+                                  mark))
 
 out(BAR + "\n")
 
