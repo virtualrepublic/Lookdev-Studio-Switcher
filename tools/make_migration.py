@@ -1158,6 +1158,27 @@ def _ws_show_tool(area):
             space.top = 0
 
 
+def _ws_show_viewer(area):
+    """Point image editors at the Viewer Node image.
+
+    An appended workspace arrives with an empty slot: the space pointed at an
+    image datablock in the source file, and only workspaces were appended. The
+    compositor's own preview image is what belongs there -- it is what the
+    Rendering and Compositing tabs are for.
+
+    "Viewer Node" is Blender's name for it and it exists in any scene whose
+    compositor has a Viewer node, which this one does. If it is not there yet
+    the slot is left empty rather than filled with something arbitrary.
+    """
+    image = bpy.data.images.get("Viewer Node")
+    if image is None:
+        _ws_log("      no 'Viewer Node' image yet -- editor left empty")
+        return
+    for space in area.spaces:
+        if space.type == 'IMAGE_EDITOR':
+            space.image = image
+
+
 def _ws_panel_category():
     """The N-panel tab the add-on lives in, read out of the embedded source.
 
@@ -1198,16 +1219,17 @@ def _ws_open_panel(area):
 # every material, node trees parked wherever the region happened to sit, and a
 # text editor showing nothing at all.
 #
-# IMAGE_EDITOR is deliberately absent. Framing it with image.view_all() looked
-# obvious and was wrong: what an image editor shows here is a 256x256 placeholder
-# (the source file's own header reads "Render Size 1920 x 1080 / Image Size
-# 256 x 256"), so fitting it to the area turns a small square sitting inside the
-# render outline into a large square filling the editor. The default view is
-# closer to the source than anything this can compute. Left alone.
+# The image editors get their image set, not their view framed. Framing them
+# with image.view_all() was tried and was wrong: the slot holds a 256x256
+# placeholder (the source file's own header reads "Render Size 1920 x 1080 /
+# Image Size 256 x 256"), so fitting it to the area turned a small square
+# sitting inside the render outline into a large one filling the editor. Pan and
+# zoom are not reachable anyway; what IS reachable is which image is shown.
 _WS_TIDY = {
     'OUTLINER': _ws_collapse_all_levels,
     'NODE_EDITOR': lambda area: bpy.ops.node.view_all(),
     'TEXT_EDITOR': _ws_show_tool,
+    'IMAGE_EDITOR': _ws_show_viewer,
     'VIEW_3D': _ws_open_panel,
 }
 
