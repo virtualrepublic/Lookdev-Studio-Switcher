@@ -132,6 +132,51 @@ for label, root in (("world", getattr(scene, "world", None) if scene else None),
 # the one collection worth listing by hand: an HDRI or a texture read as the
 # wrong space is exactly the kind of difference that shows up as a "working
 # space" in the interface without being a scene property at all.
+# The Color Management panel in full, property by property, no filtering. The
+# searches above are guesses about where a setting lives; this is the panel
+# itself, so whatever the "Working Space > File" row is bound to must appear
+# here with its current value and its options.
+out("\n  Color Management, every property:")
+for label, owner in (("display_settings", getattr(scene, "display_settings", None)),
+                     ("view_settings", getattr(scene, "view_settings", None)),
+                     ("sequencer_colorspace_settings",
+                      getattr(scene, "sequencer_colorspace_settings", None)),
+                     ("render.image_settings",
+                      getattr(getattr(scene, "render", None), "image_settings", None))):
+    if owner is None:
+        out("    %s: not present" % label)
+        continue
+    out("    %s" % label)
+    try:
+        props = owner.bl_rna.properties
+    except Exception as exc:
+        out("      unreadable: %s" % exc)
+        continue
+    for prop in props:
+        if prop.identifier == "rna_type":
+            continue
+        try:
+            value = getattr(owner, prop.identifier)
+        except Exception:
+            continue
+        if prop.type == 'POINTER':
+            if value is None:
+                out("      %-34s (none)" % prop.identifier)
+                continue
+            for sub in value.bl_rna.properties:
+                if sub.identifier == "rna_type":
+                    continue
+                try:
+                    out("      %-34s %r" % ("%s.%s" % (prop.identifier, sub.identifier),
+                                            getattr(value, sub.identifier)))
+                except Exception:
+                    pass
+            continue
+        if prop.type == 'COLLECTION':
+            continue
+        out("      %-34s %r%s" % (prop.identifier, value,
+                                  "" if prop.is_readonly else "  [writable]"))
+
 out("\n  colour space of every image datablock:")
 if not bpy.data.images:
     out("    (no images)")
