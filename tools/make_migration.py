@@ -1169,10 +1169,16 @@ def _ws_open_panel(area):
 # closer than what an appended workspace arrives with: outliners unfolded to
 # every material, node trees parked wherever the region happened to sit, and a
 # text editor showing nothing at all.
+#
+# IMAGE_EDITOR is deliberately absent. Framing it with image.view_all() looked
+# obvious and was wrong: what an image editor shows here is a 256x256 placeholder
+# (the source file's own header reads "Render Size 1920 x 1080 / Image Size
+# 256 x 256"), so fitting it to the area turns a small square sitting inside the
+# render outline into a large square filling the editor. The default view is
+# closer to the source than anything this can compute. Left alone.
 _WS_TIDY = {
     'OUTLINER': _ws_collapse_all_levels,
     'NODE_EDITOR': lambda area: bpy.ops.node.view_all(),
-    'IMAGE_EDITOR': lambda area: bpy.ops.image.view_all(fit_view=True),
     'TEXT_EDITOR': _ws_show_tool,
     'VIEW_3D': _ws_open_panel,
 }
