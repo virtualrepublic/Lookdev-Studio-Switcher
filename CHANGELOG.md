@@ -18,6 +18,18 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 ## [Unreleased]
 
 ### Added
+- **The generated script can carry a workspace.** Blender keeps the interface in
+  the `.blend`, so a layout can be handed to users — but not through the diff:
+  `dump_scene.py` records no interface data, and the API cannot build screen
+  areas at all (only `bpy.ops.screen.area_split`, which needs a real window).
+  What works is appending a finished workspace. `tools/export_workspace.py`
+  writes one to its own `.blend`, `make_migration.py --workspace` embeds it
+  zlib-compressed and base64-encoded, and the installer appends it as its **own
+  tab**, leaving the user's workspaces untouched. Run it twice and the second
+  run adds nothing. The blob is interface data only — a single workspace written
+  with `bpy.data.libraries.write()` pulls in its screens and nothing else, no
+  objects, meshes, materials or scenes, so none of the original download travels
+  in it. Optional: without `--workspace` the script carries no layout.
 - **The panel shows its version.** The N-panel header now reads
   *Lookdev Switcher 1.2.3* instead of *Lookdev Switcher*, taken from
   `bl_info["version"]` at registration. A converted scene previously gave no

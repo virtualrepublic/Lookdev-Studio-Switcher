@@ -38,6 +38,8 @@ import json
 import argparse
 import sys
 import os
+import zlib
+import base64
 
 # Import compare_scenes from THIS script's folder, not from the current
 # directory -- so it works no matter where the terminal happens to stand.
@@ -853,6 +855,60 @@ def install_tool():
     show_in_editor(text)
 '''
 
+WORKSPACE_BLOCK = '''
+# ============================================================================
+#  EMBEDDED WORKSPACE -- %s
+# ============================================================================
+#  Blender keeps the interface in the .blend, so a layout can be handed over --
+#  but not through the diff. dump_scene.py records no interface data, and the
+#  generator could not rebuild one anyway: the Python API has no way to create
+#  screen areas, only bpy.ops.screen.area_split, which needs a real window.
+#  What does work is appending a finished workspace, so one is carried here,
+#  zlib-compressed and base64-encoded.
+#
+#  Interface data only. bpy.data.libraries.write() with a single workspace
+#  pulls in its screens and nothing else -- no objects, meshes, materials or
+#  scenes -- so nothing of the original download travels in this blob. That is
+#  measured at export time, not assumed (tools/export_workspace.py).
+#
+#  It is added as its OWN tab. Your existing workspaces are left untouched, and
+#  you can rearrange or delete this one like any other.
+# ============================================================================
+
+WORKSPACE_NAME = %r
+
+WORKSPACE_BLEND = (
+%s)
+
+
+def install_workspace():
+    """Append the workspace as a new tab. Never replaces one the file has."""
+    import base64
+    import zlib
+    import tempfile
+
+    if bpy.data.workspaces.get(WORKSPACE_NAME) is not None:
+        log("workspace '%%s' is already here -- kept as it is" %% WORKSPACE_NAME)
+        print("    (to take a newer layout, delete that tab and run this again)")
+        return
+
+    tmp = os.path.join(tempfile.gettempdir(),
+                       "lookdev_workspace_%%d.blend" %% os.getpid())
+    try:
+        with open(tmp, "wb") as handle:
+            handle.write(zlib.decompress(base64.b64decode(WORKSPACE_BLEND)))
+        bpy.ops.workspace.append_activate(idname=WORKSPACE_NAME, filepath=tmp)
+        log("workspace '%%s' added -- see the new tab at the top" %% WORKSPACE_NAME)
+    except Exception as exc:
+        print("  ! could not add the workspace '%%s': %%s" %% (WORKSPACE_NAME, exc))
+        print("    Everything else was applied -- only the layout is missing.")
+    finally:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+'''
+
 FOOTER = '''
     print("\\n" + "=" * 74)
     print("%s change(s) applied" % len(_changes))
@@ -880,7 +936,36 @@ def read_tool(path):
     return source
 
 
-def render(em, before, after, tool_name=None, tool_source=None, self_name=None):
+def read_workspace(path, name):
+    """Read a workspace .blend and return it as chunked base64 source lines.
+
+    Compressed first: a .blend written by libraries.write() is uncompressed, and
+    the payload lands in a file people are asked to read before running it. Every
+    kilobyte saved is a kilobyte of opaque blob they do not have to scroll past.
+    """
+    with open(path, "rb") as handle:
+        raw = handle.read()
+
+    # The name is what append_activate() asks for at the user's end. It cannot be
+    # verified without Blender, but a .blend stores datablock names as plain
+    # strings, so a missing name here means the export and the -o name disagree.
+    if name.encode("utf-8") not in raw:
+        print("  ! WARNING: '%s' does not appear in %s." % (name, path))
+        print("    The generated script will ask Blender for a workspace of that")
+        print("    name and get nothing. Check --workspace-name against the name")
+        print("    you exported.")
+
+    packed = base64.b64encode(zlib.compress(raw, 9)).decode("ascii")
+    chunks = [packed[i:i + 76] for i in range(0, len(packed), 76)]
+    lines = "".join('    "%s"\n' % chunk for chunk in chunks)
+    print("  workspace '%s': %.0f KB -> %.0f KB embedded (%.0f%%)"
+          % (name, len(raw) / 1024.0, len(packed) / 1024.0,
+             100.0 * len(packed) / len(raw)))
+    return lines
+
+
+def render(em, before, after, tool_name=None, tool_source=None, self_name=None,
+           workspace_name=None, workspace_data=None):
     out = [HEADER % (before.get("blend_file") or "original",
                      after.get("blend_file") or "modified")]
 
@@ -889,6 +974,8 @@ def render(em, before, after, tool_name=None, tool_source=None, self_name=None):
         out.append(COMPOSITOR_HELPERS)
     if tool_source is not None:
         out.append(SWITCHER_BLOCK % (tool_name, tool_name, tool_source))
+    if workspace_data is not None:
+        out.append(WORKSPACE_BLOCK % (workspace_name, workspace_name, workspace_data))
     if self_name:
         out.append(SELF_REMOVE_BLOCK % self_name)
 
@@ -900,6 +987,13 @@ def render(em, before, after, tool_name=None, tool_source=None, self_name=None):
     if tool_source is not None:
         out.append('    print("\\n-- 9. Lookdev tool")')
         out.append("    install_tool()")
+        out.append("")
+    # After the tool, not before: install_tool() puts the tool into every open
+    # Text Editor, and appending the workspace switches the visible one. Doing
+    # the layout last also makes it the thing the user is left looking at.
+    if workspace_data is not None:
+        out.append('    print("\\n-- 10. Workspace")')
+        out.append("    install_workspace()")
         out.append("")
     if self_name:
         out.append("    remove_self()")
@@ -929,6 +1023,15 @@ def main():
                         help="embed this tool (e.g. config_switcher.py) into the "
                              "generated script: it is installed into the .blend "
                              "as a text block with Register enabled")
+    parser.add_argument("--workspace", default=None, metavar="PATH",
+                        help="embed this workspace .blend (from "
+                             "tools/export_workspace.py) so the generated script "
+                             "adds the layout as a new tab. Optional: without it "
+                             "the script simply carries no workspace")
+    parser.add_argument("--workspace-name", default="Lookdev", metavar="NAME",
+                        help="name of the workspace inside that .blend, which is "
+                             "what Blender is asked for when appending "
+                             "(default: Lookdev)")
 
     # Works standalone and under Blender's bundled interpreter
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
@@ -943,15 +1046,27 @@ def main():
         tool_name = os.path.basename(args.switcher)
         tool_source = read_tool(args.switcher)
 
+    workspace_data = None
+    if args.workspace:
+        if not os.path.isfile(args.workspace):
+            raise SystemExit("Workspace file not found: %s\n"
+                             "Export it first with tools/export_workspace.py, or "
+                             "leave --workspace off." % args.workspace)
+        workspace_data = read_workspace(args.workspace, args.workspace_name)
+
     with open(args.out, "w", encoding="utf-8") as handle:
         handle.write(render(em, before, after, tool_name, tool_source,
-                            self_name=os.path.basename(args.out)))
+                            self_name=os.path.basename(args.out),
+                            workspace_name=args.workspace_name,
+                            workspace_data=workspace_data))
 
     print("Wrote %s" % args.out)
     print("  %d step(s) generated" % em.count)
     if tool_source:
         print("  embedded tool: %s (%d lines)"
               % (tool_name, tool_source.count("\n") + 1))
+    if workspace_data:
+        print("  embedded workspace: %s" % args.workspace_name)
     todo_count = len([l for l in em.todo if l.startswith("#   ")])
     print("  %d item(s) left for you to decide" % todo_count)
     if em.todo:

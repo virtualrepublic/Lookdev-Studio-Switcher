@@ -178,7 +178,8 @@ Scene change → release notes must say **existing users have to reconvert**.
 - **Renames are not creations** — the generator maps `objects.X.data` changes.
 - **Camera data addressed by object name**, never `Camera.001` (load-order suffix).
 - **Phases** — collections → order → camera data → objects → focus → renames →
-  modifiers → scene → compositor nodes → compositor links → install → self-remove.
+  modifiers → scene → compositor nodes → compositor links → install tool →
+  install workspace → self-remove.
 - **Colour management is order-sensitive** — `display_device → view_transform → look`.
 - **Full `rna_dump`, not hand-picked lists** — hand-picked lists silently hid
   sampling, denoising and the whole `cycles` block once.
