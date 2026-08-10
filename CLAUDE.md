@@ -30,7 +30,8 @@ Lookdev-Studio-Switcher\               ← THE REPOSITORY (its own .git)
     │       └── LOOKDEV_STUDIO_MODIFIED_520.blend   right side — THE MASTER
     ├── snap_original.json / snap_modified.json   diff snapshots (regenerated)
     ├── Report\                        diff reports, history
-    └── CMD.txt                        every command line, ready to paste
+    ├── RUN.cmd                        double-click starter
+    └── run.ps1                        the toolchain, one step per run
 ```
 
 **Three scenes, three roles — do not conflate them:**
@@ -124,15 +125,29 @@ dumper change forces a fresh diff run before regenerating. This has crashed once
 
 ## The update procedure (short form)
 
-Full version in `_CLAUDE_\WORKFLOW.md`. Two commands, in order, run by the user on
-their machine (Blender is not in this environment). Both are run **from `_local\`**,
-where the scenes are; the scripts sit one level up in `tools\`. Ready to paste in
-`_local\CMD.txt`, with the full path to the Blender executable:
+Full version in `_CLAUDE_\WORKFLOW.md`. The user runs it on their machine —
+Blender is not in this environment. Everything goes through one entry point:
 
 ```
-blender --background --python ..\tools\diff_blends.py -- LOOKDEV_STUDIO_ORIGINAL.blend LOOKDEV_STUDIO_COPY.blend --keep-snapshots snap --summary
-blender --background --python ..\tools\make_migration.py -- snap_original.json snap_modified.json --switcher ..\lookdev_switcher.py -o ..\setup_lookdev_scene.py
+_local\RUN.cmd          double-click; run.ps1 offers the steps one at a time
+
+  1  diff + snapshots          4  generate the installer
+  2  full report -> report.txt 5  fresh test copy from ALBIN_293
+  3  report, restricted        6  cross-check against albin's 2.93 file
 ```
+
+**No Blender path is written out anywhere.** `run.ps1` resolves `blender.exe`
+itself, matching the 5.2 series — not "the newest", because ten versions sit
+side by side in the Launcher. The folder name carries the build hash, so any
+written-out path breaks at the next update, and silently: a wrong path just
+fails.
+
+**Step 4 refuses to run on stale snapshots** — when `MODIFIED_520.blend` or
+`tools\dump_scene.py` is newer than the JSONs. That is "the one thing that
+bites" above, now enforced instead of remembered.
+
+There is deliberately no run-everything option: between the diff and the
+generator sits the human reading of the report.
 
 `diff_blends.py` imports `dump_scene.py` and `compare_scenes.py` from its **own**
 folder, so all four must stay together in `tools\`.
@@ -199,7 +214,7 @@ by reading. Keep doing that.
   repo versions and have been removed; `tools\` is the single source of truth.
   The old `setup_generated.py` was archived to
   `_BACKUP_\_superseded\setup_generated_260717.py` (git-ignored) rather than
-  deleted. `_local\CMD.txt` points at `..\tools\`.
+  deleted. `_local\run.ps1` addresses `..\tools\`.
 - **`tools\` and `docs\MAINTAINING.md` are now public.** Earlier the intent was
   to keep the toolchain private. Publishing it is a fine choice — it makes the
   copyright argument transparent — but confirm it was intentional, not accidental.
