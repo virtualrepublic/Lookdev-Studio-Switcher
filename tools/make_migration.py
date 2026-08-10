@@ -380,13 +380,28 @@ def gen_modifier_prop(em, obj_name, mod_name, prop, new):
     return True
 
 
+def compare_to(target, value):
+    """The 'has this already got the right value' test for one property.
+
+    Floats need a tolerance. Blender stores them as float32 and the snapshot
+    carries the float64 that json read back, so 0.01 is 0.009999999776482582 in
+    the scene and != is true forever: the step fires on every run, reports a
+    change that changed nothing, and a second run never reaches "0 changes" --
+    which is the check that is supposed to catch steps that assign blindly.
+    """
+    if isinstance(value, float):
+        return ('if abs(%s - %s) > max(1e-6, abs(%s) * 1e-6):'
+                % (target, lit(value), lit(value)))
+    return 'if %s != %s:' % (target, lit(value))
+
+
 def gen_scene_prop(em, section, prop, new):
     target = "scene.%s.%s" % (section, prop)
     if prop in NAME_POINTERS:
         target += ".name"       # a struct, not a string -- see NAME_POINTERS
     em.step("scene", [
         'try:',
-        '    if %s != %s:' % (target, lit(new)),
+        '    ' + compare_to(target, new),
         '        %s = %s' % (target, lit(new)),
         '        ' + log_line("%s -> %s" % (target.replace("scene.", ""), new)),
         # AttributeError: read-only, or gone in this Blender version.
@@ -475,12 +490,18 @@ def gen_compositor_node_prop(em, name, prop, new):
     if prop not in ("location", "label", "mute"):
         return False
     value = tuple(new) if prop == "location" else lit(new)
+    # A location is two float32 in the scene against two float64 from the
+    # snapshot -- compared exactly it never matches and the node is "moved" to
+    # where it already is on every run. Same tolerance as the scene properties.
+    if prop == "location":
+        test = ('if node is not None and any(abs(a - b) > max(1e-6, abs(b) * 1e-6)'
+                ' for a, b in zip(node.location, %s)):' % (value,))
+    else:
+        test = 'if node is not None and node.%s != %s:' % (prop, value)
     em.step("compositor_nodes", [
         'tree = compositor_tree(scene)',
         'node = tree.nodes.get(%s) if tree else None' % lit(name),
-        'if node is not None and tuple(node.%s) != %s:'
-        % (prop, value) if prop == "location" else
-        'if node is not None and node.%s != %s:' % (prop, value),
+        test,
         '    node.%s = %s' % (prop, value),
         '    ' + log_line("compositor %s.%s -> %s" % (name, prop, new)),
     ], "compositor node %s: %s" % (name, prop))
@@ -496,7 +517,8 @@ def gen_compositor_links(em, links):
         '    ' + log_line("!! no compositor node tree to wire up"),
         'else:',
         '    made = relink(tree, %s)' % (wanted,),
-        '    ' + log_line("compositor rewired: %d link(s)" % len(wanted)),
+        '    if made is not None:',
+        '        ' + log_line("compositor rewired: %d link(s)" % len(wanted)),
     ], "compositor links (%d)" % len(wanted))
 
 
@@ -801,8 +823,24 @@ def relink(tree, wanted):
     """Rebuild the tree's links exactly as given.
 
     Links are a set, not a sequence of settable properties -- the only way to
-    reproduce them is to clear and rewire.
+    reproduce them is to clear and rewire. So look first: rewiring a tree that
+    is already wired this way is not a change, and reporting it as one is what
+    kept a second run from reaching "0 changes".
+
+    Returns the number of links made, or None when there was nothing to do.
     """
+    have = set()
+    for link in tree.links:
+        try:
+            have.add((link.from_node.name, link.from_socket.identifier,
+                      link.to_node.name, link.to_socket.identifier))
+        except Exception:
+            have = None
+            break
+    if have is not None:
+        want = set((f[0], f[1], t[0], t[1]) for f, t in wanted)
+        if have == want:
+            return None
     for link in list(tree.links):
         tree.links.remove(link)
     made = 0
@@ -857,19 +895,29 @@ def show_in_editor(text):
                         space.top = 0           # scroll back to the first line
                         shown = True
         if shown:
-            log("'%%s' is now open in the text editor" %% text.name)
+            print("  . '%%s' is now open in the text editor" %% text.name)
     except Exception as exc:
         print("  ! could not show '%%s' in the editor: %%s" %% (text.name, exc))
 
 
 def install_tool():
-    """Put the tool into this .blend and register it right away."""
+    """Put the tool into this .blend and register it right away.
+
+    Only what actually changes is logged. Registering the classes and pointing
+    the editor at the text happen on every run by design -- they are how the
+    panel appears without reopening the file -- but they change nothing in the
+    .blend, and counting them as changes meant a second run could never report
+    zero, which is the check that catches steps assigning blindly.
+    """
     text = bpy.data.texts.get(TOOL_NAME)
     if text is None:
         text = bpy.data.texts.new(TOOL_NAME)
+        text.write(TOOL_SOURCE)
         log("text block '%%s' created" %% TOOL_NAME)
-    text.clear()
-    text.write(TOOL_SOURCE)
+    elif text.as_string() != TOOL_SOURCE:
+        text.clear()
+        text.write(TOOL_SOURCE)
+        log("text block '%%s' updated to this version" %% TOOL_NAME)
 
     if not text.use_module:
         text.use_module = True          # this is the "Register" checkbox
@@ -886,7 +934,7 @@ def install_tool():
         except Exception:
             pass
         namespace["register"]()
-        log("tool registered -- see the N-panel in the 3D viewport")
+        print("  . tool registered -- see the N-panel in the 3D viewport")
     except Exception as exc:
         print("  ! could not register '%%s' now: %%s" %% (TOOL_NAME, exc))
         print("    It will load by itself when the file is reopened with "

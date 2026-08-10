@@ -43,6 +43,19 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
   text block and read it.
 
 ### Fixed
+- **A second run reports zero changes again.** It reported seven on a scene it
+  had not touched, from three causes. Floats are stored as float32 and compared
+  against the float64 the snapshot carries, so `0.01` is `0.00999999977…` in the
+  scene and `!=` was true forever — one setting and three node positions were
+  rewritten to what they already held, every run. The compositor links were
+  rebuilt unconditionally, because links are a set and cannot be assigned
+  individually; they are now compared first and left alone when they already
+  match. And registering the add-on and pointing the text editor at it are done
+  on every run by design — that is how the panel appears without reopening the
+  file — but they change nothing in the `.blend` and no longer count as changes.
+  This matters beyond tidiness: "run it twice, nothing changes" is the check
+  that catches a step assigning without comparing, and it cannot do that while
+  it is drowning in changes that are not changes.
 - **The output format now actually lands.** `render.image_settings.file_format`
   was written while `media_type` was still `IMAGE`, and in that state the enum
   holds no `OPEN_EXR_MULTILAYER` — so Blender refused it, the generated
