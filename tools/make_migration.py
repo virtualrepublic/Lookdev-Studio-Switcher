@@ -132,7 +132,13 @@ def log_line(message, indent=""):
 class Emitter:
     """Collects generated code in phases so ordering is guaranteed."""
 
-    PHASES = ("collections", "collection_order", "camera_data", "objects",
+    # working_space is first, and it has to be. The operator behind it converts
+    # every colour in the file. The snapshot holds the reworked scene's values,
+    # which are already in the new space -- so converting first and writing
+    # afterwards is right, and writing first would convert those values a
+    # second time.
+    PHASES = ("working_space",
+              "collections", "collection_order", "camera_data", "objects",
               "focus", "renames", "modifiers", "scene",
               # nodes before links: a link needs both ends to exist
               "compositor_nodes", "compositor_links")
@@ -162,16 +168,17 @@ class Emitter:
     def body(self):
         out = []
         titles = {
-            "collections": "1. Collections",
-            "collection_order": "2. Collection order (exact, as in the new scene)",
-            "camera_data": "3. Camera data blocks",
-            "objects": "4. Objects (create, place, link)",
-            "focus": "5. Focus objects (need the objects above)",
-            "renames": "6. Data block renames",
-            "modifiers": "7. Modifiers",
-            "scene": "8. Scene settings",
-            "compositor_nodes": "9. Compositor nodes",
-            "compositor_links": "10. Compositor links",
+            "working_space": "1. Blend file working colour space (converts every colour)",
+            "collections": "2. Collections",
+            "collection_order": "3. Collection order (exact, as in the new scene)",
+            "camera_data": "4. Camera data blocks",
+            "objects": "5. Objects (create, place, link)",
+            "focus": "6. Focus objects (need the objects above)",
+            "renames": "7. Data block renames",
+            "modifiers": "8. Modifiers",
+            "scene": "9. Scene settings",
+            "compositor_nodes": "10. Compositor nodes",
+            "compositor_links": "11. Compositor links",
         }
         for name in self.PHASES:
             if not self.phases[name]:
@@ -182,6 +189,48 @@ class Emitter:
 
 
 # --- generators --------------------------------------------------------------
+
+def gen_working_space(em, new):
+    """Change the blend file's working colour space.
+
+    Unlike every other step this is an operator call, and it has to be.
+    bpy.data.colorspace.working_space is read-only; the value cannot be
+    assigned. Measured on 5.2 LTS:
+
+        bpy.ops.wm.set_working_color_space(convert_colors=..., working_space=...)
+        'Set Blend File Working Color Space'
+        'Change the working color space of all colors in this blend file'
+        options: 'Linear Rec.709', 'Linear Rec.2020', 'ACEScg'
+
+    convert_colors=True is the checkbox in the dialog, and it is what makes the
+    step meaningful: without it the label changes and every colour in the file
+    is reinterpreted rather than converted, which shifts the whole look.
+
+    An operator is not an assignment, and bpy.ops is quiet about failing --
+    workspace.delete() returned {'CANCELLED'} ten times while the log happily
+    reported ten removals. So the result is read back and only then logged.
+    """
+    em.step("working_space", [
+        'try:',
+        '    space = getattr(bpy.data, "colorspace", None)',
+        '    if space is None:',
+        '        ' + log_line("!! this Blender has no blend file working colour "
+                              "space -- nothing to set"),
+        '    elif space.working_space != %s:' % lit(new),
+        '        bpy.ops.wm.set_working_color_space(working_space=%s,'
+        ' convert_colors=True)' % lit(new),
+        '        if space.working_space == %s:' % lit(new),
+        '            ' + log_line("working colour space -> %s "
+                                  "(all colours in the file converted)" % new),
+        '        else:',
+        '            log(%s + repr(space.working_space))'
+        % lit("!! working colour space NOT changed, still: "),
+        # RuntimeError is what a refused operator raises; the other two are the
+        # house convention for a property that moved or will not take the value.
+        'except (AttributeError, TypeError, RuntimeError) as exc:',
+        '    log(%s + str(exc))' % lit("!! skipped working colour space: "),
+    ], "blend file working colour space")
+
 
 def gen_collection_added(em, name, data):
     lines = [
@@ -554,6 +603,22 @@ def build(before, after, changes):
 
     for kind, path, old, new in changes:
         head = path[0] if path else ""
+
+        # --- blend file ----------------------------------------------------
+        if head == "blend_file_settings" and path[-1:] == ("working_space",):
+            if kind == "changed" and new:
+                gen_working_space(em, new)
+                continue
+        if head == "blend_file_settings" and len(path) == 1 and kind == "added":
+            # The whole section is new: one snapshot predates the dumper knowing
+            # about it. Both snapshots must come from the same dumper, so say so
+            # rather than generating from half the evidence.
+            em.note("blend_file_settings appeared as a whole -- one snapshot is "
+                    "older than the other. Re-run the diff before trusting this.")
+            value = (new or {}).get("working_space")
+            if value:
+                gen_working_space(em, value)
+            continue
 
         # --- collections ---------------------------------------------------
         if head == "collections" and len(path) == 2 and kind == "added":
