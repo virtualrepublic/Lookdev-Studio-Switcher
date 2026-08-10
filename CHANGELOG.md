@@ -17,7 +17,12 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ## [Unreleased]
 
-_Work in progress lands here until the next tag._
+### Changed
+- **Copyright notice** now reads `Prof. Michael Klein` instead of `Michael Klein`
+  in `lookdev_switcher.py` and in the copy embedded in `setup_lookdev_scene.py`.
+  "Prof." is an Amtstitel under Berlin state law and part of the name, so unlike
+  an academic degree it belongs in the legal notice. No change in behaviour — the
+  licence, the terms and the add-on itself are untouched.
 
 ---
 

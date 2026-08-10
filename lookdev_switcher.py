@@ -5,7 +5,7 @@
 #     professor@virtualrepublic.org
 #     2026/07/09
 #
-#  Copyright (C) 2026  Michael Klein
+#  Copyright (C) 2026  Prof. Michael Klein
 #
 #  This program is free software: you can redistribute it and/or modify it under
 #  the terms of the GNU General Public License as published by the Free Software
