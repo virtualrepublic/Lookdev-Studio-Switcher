@@ -34,8 +34,7 @@ Lookdev-Studio-Switcher\               ← THE REPOSITORY (its own .git)
     │                                  switcher — overwrite it when the layout
     │                                  changes, every generation re-reads it
     ├── Report\                        diff reports, history
-    ├── RUN.cmd                        double-click starter
-    └── run.ps1                        the toolchain, one step per run
+    └── RUN.cmd                        double-click launcher for ..\tools\run.ps1
 ```
 
 **Three inputs feed the installer, and each has gone stale unnoticed at least
@@ -101,6 +100,7 @@ Lookdev-Studio-Switcher\
 │   │                           GUI only; a background Blender holds no workspaces
 │   ├── probe_ui_state.py       what the interface API does and does not expose
 │   │                           (diagnostic, not part of a release run)
+│   ├── run.ps1                 THE ENTRY POINT -- the steps, one per run
 │   └── new-release.ps1         release helper (PowerShell)
 ├── _CLAUDE_\                   HANDOFF, WORKFLOW, VibeCoding .docx — git-ignored
 ├── _BACKUP_\                   V000, V100, _notes, v1.0.0 zip — git-ignored
@@ -252,7 +252,7 @@ by reading. Keep doing that.
   repo versions and have been removed; `tools\` is the single source of truth.
   The old `setup_generated.py` was archived to
   `_BACKUP_\_superseded\setup_generated_260717.py` (git-ignored) rather than
-  deleted. `_local\run.ps1` addresses `..\tools\`.
+  deleted. `tools\run.ps1` is the entry point; `_local\RUN.cmd` only launches it.
 - **`tools\` and `docs\MAINTAINING.md` are now public.** Earlier the intent was
   to keep the toolchain private. Publishing it is a fine choice — it makes the
   copyright argument transparent — but confirm it was intentional, not accidental.
