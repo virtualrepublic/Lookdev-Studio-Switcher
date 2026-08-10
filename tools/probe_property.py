@@ -1,5 +1,5 @@
 # ============================================================================
-#  PROBE PROPERTY  v1.0
+#  PROBE PROPERTY  v2.0
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -7,21 +7,23 @@
 #  Copyright (C) 2026  Prof. Michael Klein
 #  SPDX-License-Identifier: GPL-3.0-or-later
 # ============================================================================
-#  Finds where a setting actually lives in the scene's RNA.
+#  Finds where a setting actually lives in the RNA.
 #
 #  The diff can only carry what dump_scene.py records, and it records named
 #  sections. A setting that sits somewhere else is invisible: it never appears
 #  in a report, it is never generated, and the converted scene keeps the
-#  original value while everything else looks right. That has now happened with
-#  the colour management working space.
+#  original value while everything else looks right.
 #
-#  Rather than guess at property names for a Blender past the model's
-#  knowledge, this walks the scene's RNA and prints every property whose path
-#  matches a search term, with its current value.
+#  Two ways to search, and the second is the one that works:
 #
-#  Run it in the master and again in a converted scene, then compare: the pair
-#  tells you both the exact RNA path and the two values, which is what
-#  dump_scene.py needs to record it.
+#    by NAME   -- guessing at identifiers for a Blender past the model's
+#                 knowledge. Cheap, and it misses anything named unexpectedly.
+#    by VALUE  -- you know what the setting reads in one file and what it reads
+#                 in the other. Search for those strings and the property
+#                 announces itself, whatever it is called.
+#
+#  Run it in both files and compare. The pair gives the exact RNA path and both
+#  values -- which is what dump_scene.py needs in order to record it.
 #
 #  Read-only. Writes probe_property.log.txt next to the open .blend.
 #
@@ -32,14 +34,17 @@ import bpy
 import os
 import tempfile
 
-# --- edit this when looking for something else --------------------------------
-TERMS = ("work", "space", "reference", "colorspace", "colour", "gamut", "primaries")
-DEPTH = 3
+# --- edit these ---------------------------------------------------------------
+# Values you can see in the interface and want to locate. This is the reliable
+# half: put in what the setting actually reads.
+VALUES = ("ACEScg", "Rec.709", "Rec709", "Linear Rec.709")
+# Identifier fragments, as a second net.
+TERMS = ("work", "space", "reference", "colorspace", "gamut", "primaries")
+DEPTH = 4
 # ------------------------------------------------------------------------------
 
 BAR = "=" * 74
 _lines = []
-_seen = set()
 
 
 def out(text=""):
@@ -47,16 +52,18 @@ def out(text=""):
     _lines.append(text)
 
 
-def interesting(path):
-    low = path.lower()
-    return any(term in low for term in TERMS)
+def walk(owner, path, depth, seen):
+    """Descend through RNA pointers, reporting matches by value and by name.
 
-
-def walk(owner, path, depth):
-    """Descend through RNA pointers, printing anything whose path matches."""
-    if depth > DEPTH or id(owner) in _seen:
+    Visited paths are tracked by PATH, not by id(). RNA wrappers are created
+    fresh on every attribute access and Python reuses the id of a collected
+    one, so an id-based guard silently skips whole subtrees -- which is why an
+    earlier run of this probe found image_settings in one file and not in the
+    other.
+    """
+    if depth > DEPTH or path in seen:
         return
-    _seen.add(id(owner))
+    seen.add(path)
     try:
         props = owner.bl_rna.properties
     except Exception:
@@ -72,20 +79,21 @@ def walk(owner, path, depth):
             continue
         if prop.type == 'POINTER':
             if value is not None:
-                walk(value, full, depth + 1)
+                walk(value, full, depth + 1, seen)
             continue
-        if prop.type in ('COLLECTION',):
+        if prop.type == 'COLLECTION':
             continue
-        if interesting(full):
-            writable = "" if prop.is_readonly else "  [writable]"
-            out("  %-58s %r%s" % (full, value, writable))
-            if prop.type == 'ENUM':
-                try:
-                    items = [i.identifier for i in prop.enum_items]
-                    if items:
-                        out("      options: %s" % ", ".join(items[:12]))
-                except Exception:
-                    pass
+
+        text = value if isinstance(value, str) else None
+        by_value = text is not None and any(v.lower() == text.lower()
+                                            or v.lower() in text.lower()
+                                            for v in VALUES)
+        by_name = any(term in full.lower() for term in TERMS)
+        if not (by_value or by_name):
+            continue
+        mark = "  <== VALUE MATCH" if by_value else ""
+        writable = "" if prop.is_readonly else "  [writable]"
+        out("  %-56s %r%s%s" % (full, value, writable, mark))
 
 
 out("\n" + BAR)
@@ -93,23 +101,29 @@ out("  PROBE PROPERTY -- where does a setting live?")
 out(BAR)
 out("  blender : %s" % bpy.app.version_string)
 out("  file    : %s" % (bpy.data.filepath or "<unsaved>"))
+out("  values  : %s" % ", ".join(VALUES))
 out("  terms   : %s" % ", ".join(TERMS))
 
 scene = getattr(bpy.context, "scene", None) or (bpy.data.scenes[0] if bpy.data.scenes else None)
-if scene is None:
-    out("\n  no scene.")
-else:
-    out("\n  matches under scene:")
-    walk(scene, "scene", 1)
 
-out("\n  and under the render settings of every scene section the dumper knows:")
-if scene is not None:
-    for section in ("render", "view_settings", "display_settings",
-                    "sequencer_colorspace_settings", "cycles", "eevee"):
-        owner = getattr(scene, section, None)
-        if owner is not None:
-            _seen.discard(id(owner))
-            walk(owner, "scene.%s" % section, 1)
+out("\n  under the scene:")
+if scene is None:
+    out("    no scene.")
+else:
+    walk(scene, "scene", 1, set())
+
+# The working space may not belong to the scene at all. Look wider, each from
+# its own root so one subtree cannot mask another.
+out("\n  elsewhere:")
+for label, root in (("world", getattr(scene, "world", None) if scene else None),
+                    ("view_layer", getattr(bpy.context, "view_layer", None)),
+                    ("preferences", getattr(bpy.context, "preferences", None))):
+    if root is None:
+        continue
+    before = len(_lines)
+    walk(root, label, 1, set())
+    if len(_lines) == before:
+        out("  %-56s (nothing)" % label)
 
 out(BAR + "\n")
 
