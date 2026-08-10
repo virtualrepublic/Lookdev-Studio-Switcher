@@ -8,6 +8,14 @@
     tree into _BACKUP_\ (built from git, so only tracked files are included --
     no .blend, no snapshots).
 
+    Because that ZIP comes from git, it cannot contain the master scene
+    _local\scenes\COMPARE\LOOKDEV_STUDIO_MODIFIED_520.blend -- the one file the
+    repository is not allowed to hold, and the one file the project cannot be
+    rebuilt without. It is therefore archived separately into _BACKUP_\scenes\,
+    named after the tag, with a MANIFEST.txt recording tag, date and SHA-256.
+    If the hash matches an earlier release the scene did not change (a panel-only
+    release) and only a manifest line is written -- no second copy.
+
     With -Publish it also does the GitHub side, which this script used to leave
     manual and which has been forgotten before:
       B. push the current branch and the tag to origin
@@ -76,6 +84,21 @@ if ($parts.Count -eq 3) {
     }
 }
 
+# The master scene is git-ignored by design (it carries albin's geometry), so the
+# ZIP further down cannot hold it. Check for it now rather than after the tag
+# exists: a missing scene does not invalidate the release, but that version's
+# scene would be unrecoverable, and by then the tag cannot be taken back.
+$sceneSrc  = '_local\scenes\COMPARE\LOOKDEV_STUDIO_MODIFIED_520.blend'
+$sceneDir  = '_BACKUP_\scenes'
+$sceneMani = Join-Path $sceneDir 'MANIFEST.txt'
+$sceneOk   = Test-Path $sceneSrc
+if (-not $sceneOk) {
+    Write-Host "!!  Master scene not found:" -ForegroundColor Yellow
+    Write-Host "!!    $sceneSrc" -ForegroundColor Yellow
+    Write-Host "!!  Releasing anyway -- but $tag will carry no scene archive." -ForegroundColor Yellow
+    Write-Host ""
+}
+
 Write-Host "==> Staging and committing..." -ForegroundColor Cyan
 git add -A
 git diff --cached --quiet                       # exit 0 = nothing staged
@@ -95,6 +118,51 @@ New-Item -ItemType Directory -Force -Path '_BACKUP_' | Out-Null
 $zip = "_BACKUP_\lookdev-switcher_$tag.zip"
 git archive --format=zip -o $zip $tag
 Assert-LastExit 'git archive'
+
+Write-Host "==> Archiving the master scene..." -ForegroundColor Cyan
+$sceneNote = 'none (scene not found)'
+if ($sceneOk) {
+    New-Item -ItemType Directory -Force -Path $sceneDir | Out-Null
+    if (-not (Test-Path $sceneMani)) {
+        Set-Content -Path $sceneMani -Encoding utf8 -Value @(
+            '# The master scene, one entry per release.',
+            '#',
+            '# The repository cannot hold this file: it is a derivative of a scene',
+            '# that is not ours to redistribute, so .gitignore blocks it. Without',
+            '# it the project cannot be rebuilt -- the generated installer is',
+            '# derived from the diff against it. Hence this archive.',
+            '#',
+            '# A line with "= vX.Y.Z" means the scene was byte-identical to that',
+            '# release (a panel-only change), so no second copy was stored.',
+            '#',
+            '# tag        date              sha-256                                                           file',
+            '# ------------------------------------------------------------------------------------------------------')
+    }
+    $hash  = (Get-FileHash $sceneSrc -Algorithm SHA256).Hash
+    $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm'
+    $prior = $null
+    $hit = Select-String -Path $sceneMani -SimpleMatch -Pattern $hash | Select-Object -First 1
+    if ($hit) { $prior = ($hit.Line.Trim() -split '\s+')[0] }
+
+    if ($prior) {
+        # Same bytes as an earlier release: a panel-only change. Record it, but
+        # do not store the file twice.
+        Add-Content -Path $sceneMani -Encoding utf8 `
+            -Value ('{0,-10} {1}  {2}  = {3} (scene unchanged)' -f $tag, $stamp, $hash, $prior)
+        $sceneNote = "unchanged since $prior -- not copied"
+        Write-Host "    scene is byte-identical to $prior -- manifest line only" -ForegroundColor Yellow
+    } else {
+        $sceneDst = Join-Path $sceneDir "LOOKDEV_STUDIO_MODIFIED_520_$tag.blend"
+        Copy-Item $sceneSrc $sceneDst -Force
+        Add-Content -Path $sceneMani -Encoding utf8 `
+            -Value ('{0,-10} {1}  {2}  {3}' -f $tag, $stamp, $hash, (Split-Path $sceneDst -Leaf))
+        $mb = [math]::Round((Get-Item $sceneDst).Length / 1MB, 1)
+        $sceneNote = "$sceneDst ($mb MB)"
+        Write-Host "    $sceneDst ($mb MB)"
+    }
+} else {
+    Write-Host "    skipped -- $sceneSrc not found" -ForegroundColor Yellow
+}
 
 if ($Publish) {
     # B. Push the current branch and the tag.
@@ -141,6 +209,7 @@ Write-Host "Done." -ForegroundColor Green
 Write-Host "  Commit : $(git rev-parse --short HEAD)"
 Write-Host "  Tag    : $tag"
 Write-Host "  Backup : $zip"
+Write-Host "  Scene  : $sceneNote"
 if ($Publish) {
     Write-Host "  Pushed : origin/$branch + $tag"
     Write-Host "  Release: $(gh release view $tag --json url --jq '.url' 2>$null)"
