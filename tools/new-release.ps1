@@ -84,6 +84,33 @@ if ($parts.Count -eq 3) {
     }
 }
 
+# The switcher states its version twice: in the header line and in bl_info.
+# They drifted once -- the header read "v1.2" while bl_info said (1, 2, 3) --
+# and since the header is the first thing anyone reads, a current file looked
+# stale. Both must agree with the version being released.
+$switcher = 'lookdev_switcher.py'
+if (Test-Path $switcher) {
+    $text = Get-Content $switcher -Raw
+    $hdr = [regex]::Match($text, '(?m)^#\s+LOOKDEV SWITCHER\s+v(\d+\.\d+\.\d+)\s*$')
+    $bli = [regex]::Match($text, '"version"\s*:\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)')
+    if (-not $hdr.Success) {
+        throw "$switcher has no '#  LOOKDEV SWITCHER  vX.Y.Z' header line to check."
+    }
+    if (-not $bli.Success) {
+        throw "$switcher has no readable bl_info version tuple."
+    }
+    $headerVersion = $hdr.Groups[1].Value
+    $blinfoVersion = "{0}.{1}.{2}" -f $bli.Groups[1].Value, $bli.Groups[2].Value, $bli.Groups[3].Value
+    if ($headerVersion -ne $blinfoVersion) {
+        throw ("$switcher disagrees with itself: header says v$headerVersion, " +
+               "bl_info says $blinfoVersion. Bump both.")
+    }
+    if ($headerVersion -ne $Version) {
+        throw ("$switcher is at $headerVersion but you are releasing $Version. " +
+               "Bump the header and bl_info, then regenerate the installer.")
+    }
+}
+
 # The master scene is git-ignored by design (it carries albin's geometry), so the
 # ZIP further down cannot hold it. Check for it now rather than after the tag
 # exists: a missing scene does not invalidate the release, but that version's

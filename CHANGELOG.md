@@ -17,6 +17,21 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ## [Unreleased]
 
+### Added
+- **The panel shows its version.** The N-panel header now reads
+  *Lookdev Switcher 1.2.3* instead of *Lookdev Switcher*, taken from
+  `bl_info["version"]` at registration. A converted scene previously gave no
+  way at all to tell which build it carried — the only check was to open the
+  text block and read it.
+
+### Fixed
+- **The file no longer contradicts itself about its version.** The header said
+  `LOOKDEV SWITCHER v1.2` while `bl_info` said `(1, 2, 3)`. Since the header is
+  the first line anyone reads, an up-to-date file looked stale. Both now carry
+  the full version, and `tools/new-release.ps1` refuses to release when the
+  header, `bl_info` and the released version do not all agree. The stale date
+  line in the header is gone — the changelog and git history carry that.
+
 ### Changed
 - **Copyright notice** now reads `Prof. Michael Klein` instead of `Michael Klein`
   in `lookdev_switcher.py` and in the copy embedded in `setup_lookdev_scene.py`.

@@ -1,9 +1,14 @@
 # ============================================================================
-#  LOOKDEV SWITCHER  v1.2
+#  LOOKDEV SWITCHER  v1.2.3
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
-#     2026/07/09
+#
+#  The version above must match bl_info["version"] below -- new-release.ps1
+#  refuses to release when they disagree. It used to read "v1.2" while bl_info
+#  said (1, 2, 3), which made a current file look stale to anyone reading the
+#  first line. A date used to stand here too and rotted the same way; the
+#  CHANGELOG and the git history carry that.
 #
 #  Copyright (C) 2026  Prof. Michael Klein
 #
@@ -721,7 +726,10 @@ class SCENE_OT_set_render_path(bpy.types.Operator):
 
 
 class VIEW3D_PT_lookdev_switcher(bpy.types.Panel):
-    bl_label = "Lookdev Switcher"
+    # Read from bl_info, so the panel cannot disagree with the file about which
+    # version is registered. Without this there is no way to tell from inside
+    # Blender which build a converted scene actually carries.
+    bl_label = "Lookdev Switcher %d.%d.%d" % bl_info["version"]
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Lookdev"         # tab name in the N-panel
