@@ -910,6 +910,25 @@ def _ws_write_log():
 
 
 def install_workspace():
+    """Wrapper: this step must never abort the migration, and must always log.
+
+    It runs after the scene is already converted and the tool installed, so an
+    exception here would leave the run without its final self-removal for the
+    sake of a layout. Whatever happens, the reason ends up in the log file.
+    """
+    try:
+        _install_workspace()
+    except Exception as exc:
+        import traceback
+        _ws_log("  ! the interface step failed: %%s" %% exc)
+        for line in traceback.format_exc().splitlines():
+            _ws_log("      %%s" %% line)
+        _ws_log("    Everything else was applied -- only the layout is missing.")
+    finally:
+        _ws_write_log()
+
+
+def _install_workspace():
     """Put the interface from the source file into this one.
 
     A workspace of the same name is REPLACED, not duplicated: appending a
@@ -928,7 +947,6 @@ def install_workspace():
     for existing in bpy.data.workspaces:
         if existing.get("lookdev_ui") == WORKSPACE_STAMP:
             _ws_log("  already at this version -- nothing to do")
-            _ws_write_log()
             return
     _ws_log("  workspaces in this file before: %%s"
             %% ", ".join(w.name for w in bpy.data.workspaces))
@@ -940,14 +958,19 @@ def install_workspace():
             handle.write(zlib.decompress(base64.b64decode(WORKSPACE_BLEND)))
         # load() appends and reports the names as they are in the source file,
         # which is what tells us who replaces whom.
+        #
+        # Hand it a SEPARATE list. Blender fills data_to in place, so passing
+        # the same object we keep the names in turns `wanted` into WorkSpace
+        # datablocks behind our back -- and workspaces.get() then raises
+        # "key must be a string or tuple, not WorkSpace". str() because the
+        # names must survive as plain Python strings either way.
         with bpy.data.libraries.load(tmp) as (src, dst):
-            wanted = list(src.workspaces)
-            dst.workspaces = wanted
+            wanted = [str(n) for n in src.workspaces]
+            dst.workspaces = list(wanted)
         loaded = [ws for ws in dst.workspaces if ws is not None]
     except Exception as exc:
         _ws_log("  ! could not read the embedded interface: %%s" %% exc)
         _ws_log("    Everything else was applied -- only the layout is missing.")
-        _ws_write_log()
         return
     finally:
         try:
@@ -960,7 +983,6 @@ def install_workspace():
                 %% (len(loaded), len(wanted)))
         for ws in loaded:
             ws["lookdev_ui"] = WORKSPACE_STAMP
-        _ws_write_log()
         return
 
     # Free the names FIRST by renaming the old workspaces aside, then rename the
@@ -1023,7 +1045,6 @@ def install_workspace():
         for name in survivors:
             _ws_log("      %%s" %% name)
         _ws_log("  They are marked [replaced] -- right-click the tab > Delete.")
-    _ws_write_log()
 '''
 
 FOOTER = '''
