@@ -17,10 +17,34 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ## [1.3.0] — 2026-08-10
 
-**Existing users have to reconvert.** This release changes the scene, and for
-the first time it changes *colour data* rather than only settings — see the
-working colour space entry below. Run the current `setup_lookdev_scene.py` on a
-fresh copy of your download and save it under a new name.
+The scene's **working colour space** now travels. A master scene converted to
+ACEScg used to arrive at your end still on Linear Rec.709, with nothing to say
+why. It arrives as ACEScg now.
+
+### You have to reconvert
+
+This release changes the scene — and for the first time it changes *colour
+data*, not only settings. Setting the working space converts every material,
+light and world colour in the file, which is what Blender's own
+*Set Blend File Working Color Space* dialog does. So this is not a panel update
+you can pick up by reloading:
+
+1. Download `setup_lookdev_scene.py` from the assets below.
+2. Open a **fresh copy** of your Studio Lookdev download in Blender 5.2.
+3. *Scripting → Open → `setup_lookdev_scene.py` → Run Script.*
+4. Save under a **new** name, so your original download stays untouched.
+
+The colour conversion runs a moment after the rest, once the new layout has
+settled, and reports itself in the console below the *"n change(s) applied"*
+line. Running the script twice is safe: the second run reports nothing.
+
+Full reasoning, and everything that went wrong on the way, in
+[CHANGELOG.md](https://github.com/virtualrepublic/Lookdev-Studio-Switcher/blob/main/CHANGELOG.md).
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases
+page.
 
 ### Added
 - **The blend file's working colour space now travels.** A master scene

@@ -51,6 +51,13 @@ function Assert-LastExit([string]$what) {
 
 # Pull the release notes for a version out of CHANGELOG.md: everything under the
 # "## [X.Y.Z] ..." heading up to the next "## " heading, trailing rule stripped.
+#
+# Then cut at <!-- release-notes-end -->, if the entry has one. One file, two
+# readers: someone on the Releases page wants to know what changed, whether they
+# must reconvert, and how to run it. The reasoning below that marker -- why a
+# property was where it was, which operator pushed which undo step -- is for
+# whoever maintains this, and it made the 1.3.0 page 7000 characters long.
+# Entries without the marker are published whole, so older ones still work.
 function Get-ChangelogNotes([string]$version) {
     if (-not (Test-Path 'CHANGELOG.md')) { return $null }
     $text = Get-Content 'CHANGELOG.md' -Raw
@@ -58,6 +65,13 @@ function Get-ChangelogNotes([string]$version) {
     $m = [regex]::Match($text, $pattern)
     if (-not $m.Success) { return $null }
     $body = $m.Groups[1].Value.TrimEnd()
+    $cut = $body.IndexOf('<!-- release-notes-end -->')
+    if ($cut -ge 0) {
+        $body = $body.Substring(0, $cut)
+    } else {
+        Write-Host "!!  CHANGELOG entry for $version has no <!-- release-notes-end -->" -ForegroundColor Yellow
+        Write-Host "    marker -- publishing the whole entry, maintainer notes and all." -ForegroundColor Yellow
+    }
     $body = $body -replace '\s*-{3,}\s*$', ''    # drop a trailing horizontal rule
     return $body.Trim()
 }
