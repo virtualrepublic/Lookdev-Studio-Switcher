@@ -1103,7 +1103,86 @@ def _install_workspace():
         _ws_retry([old.name for old in doomed], window)
     else:
         _ws_log("  nothing to remove")
+        _ws_collapse_outliners(window)
     return
+
+def _ws_collapse_outliners(window):
+    """Collapse the outliners in every installed workspace.
+
+    NOT a copy of the source file's state -- that cannot be read or written.
+    SpaceOutliner exposes no treestore, tree, expanded, open or state; the
+    expansion lives as references to the datablocks of the file it was saved
+    in, so an appended workspace arrives with everything unfolded. Collapsing
+    is the nearest thing the API offers, and it is much closer to a lookdev
+    file's usual state than a tree opened down to every material.
+
+    The operator needs an outliner in the ACTIVE window, so the workspaces are
+    walked one at a time: switch, let the switch land, collapse, move on. It
+    ends back on the tab it started from. All of this runs from a timer -- the
+    script's own operator has long finished by then.
+    """
+    if window is None:
+        _ws_log("  no window -- outliners left as they are")
+        _ws_write_log()
+        return
+
+    started_on = getattr(window, "workspace", None)
+    names = [ws.name for ws in bpy.data.workspaces
+             if ws.get("lookdev_ui") == WORKSPACE_STAMP]
+    state = {"i": 0, "switched": False, "done": 0}
+
+    def step():
+        if state["i"] >= len(names):
+            if started_on is not None:
+                try:
+                    window.workspace = started_on
+                except Exception:
+                    pass
+            _ws_log("  outliners collapsed in %%d workspace(s)" %% state["done"])
+            _ws_log("  (the source file's exact expansion cannot be carried --")
+            _ws_log("   SpaceOutliner exposes nothing about it. This is the")
+            _ws_log("   closest the API allows.)")
+            _ws_write_log()
+            return None
+
+        ws = bpy.data.workspaces.get(names[state["i"]])
+        if ws is None:
+            state["i"] += 1
+            return 0.05
+
+        if not state["switched"]:
+            try:
+                window.workspace = ws
+            except Exception as exc:
+                _ws_log("      could not show '%%s': %%s" %% (ws.name, exc))
+                state["i"] += 1
+                return 0.05
+            state["switched"] = True
+            return 0.15                 # let the switch reach the interface
+
+        screen = getattr(window, "screen", None)
+        for area in getattr(screen, "areas", []):
+            if area.type != 'OUTLINER':
+                continue
+            try:
+                with bpy.context.temp_override(window=window, area=area):
+                    # One level per call; a lookdev scene is nowhere near this
+                    # deep, so this reaches the top.
+                    for _ in range(12):
+                        bpy.ops.outliner.show_one_level(open=False)
+                state["done"] += 1
+            except Exception as exc:
+                _ws_log("      outliner in '%%s': %%s" %% (ws.name, exc))
+        state["switched"] = False
+        state["i"] += 1
+        return 0.05
+
+    try:
+        bpy.app.timers.register(step, first_interval=0.2)
+    except Exception as exc:
+        _ws_log("  could not collapse the outliners (%%s)" %% exc)
+        _ws_write_log()
+
 
 def _ws_retry(names, window):
     """Delete the replaced workspaces, from a timer -- never inline.
@@ -1141,7 +1220,7 @@ def _ws_retry(names, window):
             _ws_log("  They are marked [replaced] -- right-click the tab > Delete.")
         else:
             _ws_log("  all old workspaces removed")
-        _ws_write_log()
+        _ws_collapse_outliners(window)
         return None            # one shot
 
     try:
