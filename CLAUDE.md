@@ -221,7 +221,12 @@ Scene change → release notes must say **existing users have to reconvert**.
     `tree`, `expanded`, `open` or `state` — nothing at all. It is stored as
     references to the datablocks of the file it was saved in, so appending a
     workspace alone cannot carry it.
-  - *The N-panel tab.* `Region.active_panel_category` is read-only.
+  - *The N-panel tab.* `Region.active_panel_category` is read-only — but only
+    on a region that has never been drawn. Measured across eleven workspaces in
+    one run: ten refusals with *"attribute ... is read-only"* and one success,
+    the one tab that was actually on screen. A workspace the tidy walk only
+    passes through is never drawn, so the assignment is attempted once at the
+    end, on the tab the run finishes on.
   `bpy.data.workspaces` also has no `remove()`; deletion goes through
   `bpy.data.batch_remove()` or the tab's delete operator.
 

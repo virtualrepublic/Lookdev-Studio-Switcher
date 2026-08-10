@@ -1158,6 +1158,23 @@ def _ws_show_tool(area):
             space.top = 0
 
 
+def _ws_frame_nodes(area):
+    """Frame the node tree -- but only where there is one.
+
+    A Geometry Nodes editor with no matching object, or a Shading editor with
+    no active material, has nothing to show. node.view_all() then answers
+    "poll() failed, context is incorrect", which is correct behaviour but reads
+    like a fault in the log. Ask first.
+    """
+    for space in area.spaces:
+        if space.type != 'NODE_EDITOR':
+            continue
+        tree = getattr(space, "edit_tree", None) or getattr(space, "node_tree", None)
+        if tree is None:
+            return
+    bpy.ops.node.view_all()
+
+
 def _ws_show_viewer(area):
     """Point image editors at the Viewer Node image.
 
@@ -1227,10 +1244,9 @@ def _ws_open_panel(area):
 # zoom are not reachable anyway; what IS reachable is which image is shown.
 _WS_TIDY = {
     'OUTLINER': _ws_collapse_all_levels,
-    'NODE_EDITOR': lambda area: bpy.ops.node.view_all(),
+    'NODE_EDITOR': _ws_frame_nodes,
     'TEXT_EDITOR': _ws_show_tool,
     'IMAGE_EDITOR': _ws_show_viewer,
-    'VIEW_3D': _ws_open_panel,
 }
 
 
@@ -1261,11 +1277,26 @@ def _ws_collapse_outliners(window):
 
     def step():
         if state["i"] >= len(names):
-            if started_on is not None:
-                try:
-                    window.workspace = started_on
-                except Exception:
-                    pass
+            if not state.get("returned"):
+                if started_on is not None:
+                    try:
+                        window.workspace = started_on
+                    except Exception:
+                        pass
+                state["returned"] = True
+                return 0.2          # let the switch land before the last step
+
+            # The sidebar tab, once, here. Measured: Region.active_panel_category
+            # is read-only on a region that has never been drawn, and a workspace
+            # the walk only passes through is never drawn. Attempting it per
+            # workspace produced ten refusals and one success -- the one that was
+            # actually on screen. So it is tried on this tab alone, now that the
+            # switch above has landed and it has been drawn.
+            screen = getattr(window, "screen", None)
+            for area in getattr(screen, "areas", []):
+                if area.type == 'VIEW_3D':
+                    _ws_open_panel(area)
+
             _ws_log("  tidied %%d area(s): outliners collapsed, views framed" %% state["done"])
             _ws_log("  (the source file's exact view cannot be carried: the")
             _ws_log("   outliner exposes nothing about expansion, and a region's")
