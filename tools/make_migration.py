@@ -1106,21 +1106,75 @@ def _install_workspace():
         _ws_collapse_outliners(window)
     return
 
-def _ws_collapse_all_levels():
+def _ws_collapse_all_levels(area):
     """One level per call; a lookdev scene is nowhere near this deep."""
     for _ in range(12):
         bpy.ops.outliner.show_one_level(open=False)
+
+
+def _ws_show_tool(area):
+    """Put the tool into the text editor.
+
+    install_tool() already does this -- but it runs BEFORE the workspaces are
+    appended, so the editor it fills is the one the user had, not the Scripting
+    tab that arrives afterwards. That one comes in pointing at a text datablock
+    from the source file, which was not appended: an empty slot.
+    """
+    name = globals().get("TOOL_NAME")
+    text = bpy.data.texts.get(name) if name else None
+    if text is None:
+        return
+    for space in area.spaces:
+        if space.type == 'TEXT_EDITOR':
+            space.text = text
+            space.top = 0
+
+
+def _ws_panel_category():
+    """The N-panel tab the add-on lives in, read out of the embedded source.
+
+    Taken from bl_category in the switcher rather than written here as well --
+    one place to change it.
+    """
+    import re
+    source = globals().get("TOOL_SOURCE", "")
+    found = re.search(r'bl_category\\s*=\\s*"([^"]+)"', source)
+    return found.group(1) if found else None
+
+
+def _ws_open_panel(area):
+    """Try to put the add-on's tab in front in the sidebar.
+
+    Region.active_panel_category measured as read-only, but that was on regions
+    of no width. Attempt it and record what happened rather than assume: if it
+    takes, the converted file opens on the Lookdev tab; if not, the log says so
+    and this can be dropped.
+    """
+    category = _ws_panel_category()
+    if not category:
+        return
+    for region in area.regions:
+        if region.type != 'UI':
+            continue
+        try:
+            region.active_panel_category = category
+            _ws_log("      sidebar tab set to '%%s'" %% category)
+        except Exception as exc:
+            _ws_log("      sidebar tab '%%s' not settable: %%s" %% (category, exc))
 
 
 # What to do in each kind of area once the interface is in place. None of this
 # reproduces the source file's view -- that state cannot be read or written.
 # These are the deterministic equivalents the API does offer, and they are much
 # closer than what an appended workspace arrives with: outliners unfolded to
-# every material, node trees parked wherever the region happened to sit.
+# every material, node trees parked wherever the region happened to sit, and a
+# text editor showing nothing at all.
 _WS_TIDY = {
     'OUTLINER': _ws_collapse_all_levels,
-    'NODE_EDITOR': lambda: bpy.ops.node.view_all(),
-    'IMAGE_EDITOR': lambda: bpy.ops.image.view_all(fit_view=True),
+    'NODE_EDITOR': lambda area: bpy.ops.node.view_all(),
+    'IMAGE_EDITOR': lambda area: bpy.ops.image.view_all(fit_view=True),
+    'TEXT_EDITOR': _ws_show_tool,
+    'VIEW_3D': _ws_open_panel,
 }
 
 
@@ -1198,7 +1252,7 @@ def _ws_collapse_outliners(window):
             try:
                 with bpy.context.temp_override(window=window, area=area,
                                                region=region):
-                    job()
+                    job(area)
                 state["done"] += 1
             except Exception as exc:
                 _ws_log("      %%s in '%%s': %%s" %% (area.type, ws.name, exc))
