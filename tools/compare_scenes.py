@@ -33,6 +33,9 @@ import sys
 IGNORE_KEYS = {
     "blend_file",
     "blender_version",
+    # Which dump_scene.py wrote this snapshot. It says nothing about the
+    # scenes; make_migration.py uses it to refuse stale snapshots.
+    "dumper_stamp",
     # Derived: these tallies only restate what the real sections already show,
     # so they add entries without adding information.
     "counts",

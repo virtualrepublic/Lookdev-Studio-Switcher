@@ -186,6 +186,85 @@ class Emitter:
 
 # --- generators --------------------------------------------------------------
 
+# --- stamps -------------------------------------------------------------------
+#  Two of them, for two different kinds of staleness. Both used to be silent.
+#
+#  dumper_stamp   in the snapshots. A change to dump_scene.py makes every
+#                 existing snapshot stale, and nothing said so -- the generator
+#                 reads the JSON, not the scenes.
+#  TOOLCHAIN STAMP in the generated installer. It covers everything that went
+#                 into it, so a toolchain change with the installer left alone
+#                 is visible to tools/new-release.ps1 instead of shipping.
+#
+#  Timestamps would have been five lines, and wrong: git sets every file's
+#  mtime to the checkout time, so a fresh clone trips them for no reason.
+
+STAMP_PARTS = ("make_migration", "snap_original", "snap_modified",
+               "switcher", "workspace")
+
+
+def file_digest(path):
+    """SHA-256 of a file's bytes, or None if it is not there."""
+    try:
+        with open(path, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+    except (OSError, TypeError):
+        return None
+
+
+def toolchain_stamp(snap_original, snap_modified, switcher, workspace):
+    """(combined stamp, [(label, digest or '-')]) over everything that is read.
+
+    The combined value is the SHA-256 of the per-file digests, joined as
+    'label:digest' lines in a fixed order -- a shape PowerShell can reproduce
+    with Get-FileHash and no bit fiddling, which is the point: the release
+    script has to be able to check it.
+
+    Not included: dump_scene.py and compare_scenes.py. Neither is read here.
+    They reach the installer only through the snapshots, and those are hashed.
+    """
+    sources = (
+        ("make_migration", os.path.abspath(__file__)),
+        ("snap_original", snap_original),
+        ("snap_modified", snap_modified),
+        ("switcher", switcher),
+        ("workspace", workspace),
+    )
+    parts = [(label, file_digest(path) or "-") for label, path in sources]
+    joined = "\n".join("%s:%s" % pair for pair in parts)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest(), parts
+
+
+def check_snapshots(before, after, path_before, path_after):
+    """Refuse to generate from snapshots that do not belong together.
+
+    Loudly, and before anything is written. The failure this replaces was a
+    traceback halfway through a run, or worse, a clean run producing an
+    installer built from data the current dumper would never have written.
+    """
+    a, b = before.get("dumper_stamp"), after.get("dumper_stamp")
+    if not a or not b:
+        raise SystemExit(
+            "These snapshots carry no dumper stamp, so there is no way to tell\n"
+            "whether they match the current dump_scene.py. Write them again:\n"
+            "  run.ps1 step 1, or diff_blends.py --keep-snapshots snap\n"
+            "  (%s / %s)" % (path_before, path_after))
+    if a != b:
+        raise SystemExit(
+            "The two snapshots were written by different versions of\n"
+            "dump_scene.py (%s vs %s). One of them is old; comparing them\n"
+            "would report differences that are only differences in the dumper.\n"
+            "Write both again in one run." % (a[:12], b[:12]))
+    mine = file_digest(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    "dump_scene.py"))
+    if mine and mine != a:
+        raise SystemExit(
+            "dump_scene.py has changed since these snapshots were written\n"
+            "(dumper %s, snapshots %s). It decides what a snapshot contains,\n"
+            "so they are stale. Write them again before generating."
+            % (mine[:12], a[:12]))
+
+
 def gen_working_space(em, new):
     """Record the target working colour space. Not a step -- see render().
 
@@ -716,6 +795,14 @@ HEADER = '''# ==================================================================
 #  GENERATED MIGRATION -- produced by make_migration.py
 # ============================================================================
 #  %s  ->  %s
+#
+#  TOOLCHAIN STAMP  %s
+#  %s
+#
+#  SHA-256 over everything that went into this file. tools/new-release.ps1
+#  recomputes it and refuses to release when it disagrees -- which means this
+#  file was not regenerated after the toolchain, the snapshots, the add-on or
+#  the interface changed. Do not edit it by hand; regenerate.
 #
 #  Converts the original scene into the reworked layout. Read before running:
 #  this is generated code, and the TODO list at the bottom shows everything the
@@ -1654,9 +1741,15 @@ def read_workspace(path):
 
 
 def render(em, before, after, tool_name=None, tool_source=None, self_name=None,
-           workspace_stamp=None, workspace_data=None):
+           workspace_stamp=None, workspace_data=None, stamp=None, stamp_parts=()):
+    # The per-part digests go in too, short. When the release script says the
+    # stamp disagrees, the next question is always "which input moved?", and
+    # this answers it without recomputing anything.
+    detail = "  ".join("%s %s" % (label, digest[:12])
+                       for label, digest in stamp_parts) or "(not stamped)"
     out = [HEADER % (before.get("blend_file") or "original",
-                     after.get("blend_file") or "modified")]
+                     after.get("blend_file") or "modified",
+                     stamp or "(not stamped)", detail)]
 
     # module level: helpers first, then the embedded tool, then migrate()
     if em.phases["compositor_nodes"] or em.phases["compositor_links"]:
@@ -1737,6 +1830,9 @@ def main():
     args = parser.parse_args(argv)
 
     before, after = load(args.original), load(args.modified)
+    # Before anything is generated: snapshots that do not belong together
+    # produce an installer that looks fine and is built from old data.
+    check_snapshots(before, after, args.original, args.modified)
     changes = diff(before, after)
     em = build(before, after, changes)
 
@@ -1753,13 +1849,18 @@ def main():
                              "leave --workspace off." % args.workspace)
         workspace_stamp, workspace_data = read_workspace(args.workspace)
 
+    stamp, stamp_parts = toolchain_stamp(args.original, args.modified,
+                                         args.switcher, args.workspace)
+
     with open(args.out, "w", encoding="utf-8") as handle:
         handle.write(render(em, before, after, tool_name, tool_source,
                             self_name=os.path.basename(args.out),
                             workspace_stamp=workspace_stamp,
-                            workspace_data=workspace_data))
+                            workspace_data=workspace_data,
+                            stamp=stamp, stamp_parts=stamp_parts))
 
     print("Wrote %s" % args.out)
+    print("  toolchain stamp: %s" % stamp[:16])
     print("  %d step(s) generated" % em.count)
     if tool_source:
         print("  embedded tool: %s (%d lines)"

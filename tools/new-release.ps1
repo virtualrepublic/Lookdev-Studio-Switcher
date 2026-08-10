@@ -124,6 +124,67 @@ if (Test-Path $switcher) {
     }
 }
 
+# The bl_info check above catches "forgot to regenerate after a version bump".
+# It cannot catch "toolchain changed, version unchanged" -- and that is the one
+# that ships silently: a fix in make_migration.py with the installer left as it
+# was looks perfectly healthy. So the generator writes a SHA-256 over every
+# input into the header, and it is recomputed here.
+#
+# Hashes, not timestamps: git sets every file's mtime to the checkout time, so
+# a timestamp check greets a fresh clone with a false alarm.
+$stampMatch = [regex]::Match((Get-Content $asset -Raw),
+                             '(?m)^#\s+TOOLCHAIN STAMP\s+([0-9a-f]{64})\s*$')
+if (-not $stampMatch.Success) {
+    Write-Host "!!  $asset carries no toolchain stamp -- it predates the check." -ForegroundColor Yellow
+    Write-Host "    Regenerate it to get one. Releasing without the check." -ForegroundColor Yellow
+} else {
+    # Same order and shape as make_migration.py's toolchain_stamp().
+    $stampInputs = @(
+        @('make_migration', 'tools\make_migration.py'),
+        @('snap_original',  '_local\snap_original.json'),
+        @('snap_modified',  '_local\snap_modified.json'),
+        @('switcher',       'lookdev_switcher.py'),
+        @('workspace',      '_local\workspace_ui.blend')
+    )
+    $missing = @($stampInputs | Where-Object { -not (Test-Path -LiteralPath $_[1]) } |
+                 ForEach-Object { $_[1] })
+    if ($missing.Count -gt 0) {
+        # _local\ is git-ignored, so a clone has no snapshots. Cannot verify,
+        # and must not pretend to.
+        Write-Host "!!  Cannot check the toolchain stamp -- not here:" -ForegroundColor Yellow
+        $missing | ForEach-Object { Write-Host "      $_" -ForegroundColor Yellow }
+        Write-Host "    Releasing without the check." -ForegroundColor Yellow
+    } else {
+        $lines = foreach ($p in $stampInputs) {
+            '{0}:{1}' -f $p[0], (Get-FileHash -LiteralPath $p[1] -Algorithm SHA256).Hash.ToLower()
+        }
+        $bytes = [Text.Encoding]::UTF8.GetBytes(($lines -join "`n"))
+        $now = (([Security.Cryptography.SHA256]::HashData($bytes) |
+                 ForEach-Object { $_.ToString('x2') }) -join '')
+        if ($now -ne $stampMatch.Groups[1].Value) {
+            # Name the input that moved -- the header carries each one short.
+            $moved = foreach ($line in $lines) {
+                $label, $hash = $line -split ':', 2
+                if (-not (Select-String -Path $asset -SimpleMatch -Quiet `
+                          -Pattern ("{0} {1}" -f $label, $hash.Substring(0, 12)))) { $label }
+            }
+            # Written out rather than packed into the exception: PowerShell
+            # reflows a multi-line throw into one wrapped, colour-coded blob,
+            # and the one line that matters -- which input moved -- disappears
+            # into it.
+            Write-Host ""
+            Write-Host "  $asset was not regenerated after the toolchain changed." -ForegroundColor Red
+            Write-Host "    stamp in the file : $($stampMatch.Groups[1].Value.Substring(0,16))" -ForegroundColor Red
+            Write-Host "    stamp right now   : $($now.Substring(0,16))" -ForegroundColor Red
+            Write-Host "    changed since     : $($moved -join ', ')" -ForegroundColor Red
+            Write-Host "  Regenerate it (run.ps1 step 2), then release." -ForegroundColor Red
+            Write-Host ""
+            throw "Stale $asset -- see above."
+        }
+        Write-Host "    toolchain stamp ok ($($now.Substring(0,16)))" -ForegroundColor DarkGray
+    }
+}
+
 # The master scene is git-ignored by design (it carries albin's geometry), so the
 # ZIP further down cannot hold it. Check for it now rather than after the tag
 # exists: a missing scene does not invalidate the release, but that version's

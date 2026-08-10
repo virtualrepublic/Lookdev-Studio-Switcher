@@ -22,6 +22,7 @@
 import bpy
 import sys
 import json
+import hashlib
 import argparse
 
 PRECISION = 5
@@ -476,6 +477,27 @@ def dump_scene(scene, full):
 
 # --- main -------------------------------------------------------------------
 
+def dumper_stamp():
+    """SHA-256 of this file, so a snapshot records which dumper wrote it.
+
+    This file decides what a snapshot contains -- the sections, and the
+    RENDER_SKIP / IMAGE_SETTINGS_SKIP / VIEW_SKIP / MODIFIER_SKIP /
+    CONSTRAINT_SKIP lists. Change any of it and every existing snapshot is
+    stale, with nothing to say so: the generator reads the JSON, not the
+    scenes, and quietly works from old data. That has cost a release once.
+
+    make_migration.py refuses to run when the two snapshots carry different
+    stamps, or when neither matches the dumper sitting next to it.
+    compare_scenes.py ignores the key, so it never shows up as a difference.
+    """
+    try:
+        with open(__file__, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+    except Exception as exc:                       # noqa: BLE001
+        print("  ! could not stamp the snapshot: %s" % exc)
+        return None
+
+
 def dump_blend_file():
     """Settings that belong to the .blend file rather than to any scene.
 
@@ -516,6 +538,7 @@ def snapshot(full=False, frame=None):
     return {
         "blend_file": bpy.path.basename(bpy.data.filepath),
         "blender_version": bpy.app.version_string,
+        "dumper_stamp": dumper_stamp(),
         "blend_file_settings": safe(dump_blend_file, label="blend file settings"),
         "scenes": {s.name: safe(lambda s=s: dump_scene(s, full), label="scene '%s'" % s.name)
                    for s in bpy.data.scenes},

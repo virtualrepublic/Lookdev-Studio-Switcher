@@ -131,11 +131,27 @@ Current release: `v1.2.3` (tag present).
 
 ---
 
-## The one thing that bites
+## The one thing that bites — now it warns
 
 **The generator reads snapshots, not scenes.** Any change to
-`tools\dump_scene.py` makes `snap_*.json` stale, and nothing warns you. Every
-dumper change forces a fresh diff run before regenerating. This has crashed once.
+`tools\dump_scene.py` makes `snap_*.json` stale. It used to warn you about
+none of that, and it crashed a release once.
+
+Two SHA-256 stamps close it. Neither uses timestamps: git sets every file's
+mtime to the checkout time, so a timestamp check greets a fresh clone with a
+false alarm.
+
+| Stamp | Written by | Checked by | Catches |
+|---|---|---|---|
+| `dumper_stamp` in each snapshot | `dump_scene.py` (hash of itself) | `make_migration.py`, before generating | snapshots from different dumpers, or from a dumper that has since changed |
+| `TOOLCHAIN STAMP` in the installer header | `make_migration.py` (hash of generator + both snapshots + switcher + workspace) | `tools\new-release.ps1` | an installer not regenerated after the toolchain, snapshots, add-on or interface moved |
+
+The snapshot check is **fatal** — it refuses before writing anything, and says
+which of the three cases it is. The release check is fatal too, and names the
+input that moved; it degrades to a warning when `_local\` is absent (a clone
+has no snapshots) or when the installer predates the stamp.
+
+`compare_scenes.py` ignores `dumper_stamp`, so it never shows up as a diff.
 
 ---
 
@@ -195,7 +211,22 @@ Scene change → release notes must say **existing users have to reconvert**.
 - **Camera data addressed by object name**, never `Camera.001` (load-order suffix).
 - **Phases** — collections → order → camera data → objects → focus → renames →
   modifiers → scene → compositor nodes → compositor links → install tool →
-  install workspace → self-remove.
+  install workspace → working space (deferred) → self-remove.
+- **The working space is an operator, and it must not run inside the script.**
+  `bpy.data.colorspace.working_space` belongs to the *file*, not to a scene, and
+  it is read-only: only
+  `bpy.ops.wm.set_working_color_space(working_space=…, convert_colors=True)`
+  changes it, and that rewrites every colour in the file. Called inline it
+  crashed Blender — `ED_workspace_change` ← `WM_window_set_active_workspace` ←
+  `wm_event_do_notifiers`, i.e. *after* the script. The undo push for an
+  operator that large lands when the outer `text.run_script()` finishes; it
+  reallocates every data-block, and the workspace switch queued by
+  `install_workspace()` is left pointing at freed memory. It now waits on a flag
+  the workspace chain sets and converts in a timer of its own. Safe to defer
+  only because the migration writes no colour anywhere — check that again before
+  adding a colour-valued step. Not to be confused with
+  `render.image_settings.linear_colorspace_settings`, the output EXR's linear
+  space; the near-identical name cost a day.
 - **Colour management is order-sensitive** — `display_device → view_transform → look`.
 - **Full `rna_dump`, not hand-picked lists** — hand-picked lists silently hid
   sampling, denoising and the whole `cycles` block once.
@@ -282,5 +313,7 @@ by reading. Keep doing that.
       regeneration reproduces it; no action needed unless the two diverge.
 - [ ] Test the compositor migration on a fresh copy — `find_node_group()`
       searching Blender's bundled assets is the only part never run for real.
-- [ ] Consider a snapshot version stamp (dumper writes it, generator checks it)
-      so stale snapshots fail loudly instead of a traceback.
+- [x] A snapshot version stamp so stale snapshots fail loudly instead of a
+      traceback. — Done, and a second stamp with it for the installer. See
+      *The one thing that bites* above for both. **The existing `snap_*.json`
+      predate it and are refused**: write them again before generating.
