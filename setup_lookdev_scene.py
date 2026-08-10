@@ -154,7 +154,7 @@ def relink(tree, wanted):
 TOOL_NAME = 'lookdev_switcher.py'
 
 TOOL_SOURCE = r'''# ============================================================================
-#  LOOKDEV SWITCHER  v1.2.3
+#  LOOKDEV SWITCHER  v1.3.0
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -212,7 +212,7 @@ TOOL_SOURCE = r'''# ============================================================
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 2, 3),
+    "version": (1, 3, 0),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
