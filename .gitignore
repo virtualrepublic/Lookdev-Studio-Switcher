@@ -61,3 +61,12 @@ desktop.ini
 #  Private working notes (handoff / workflow) -- local only, never pushed
 # ----------------------------------------------------------------------------
 /_CLAUDE_/
+
+# ----------------------------------------------------------------------------
+#  Research paper -- a separate project that happens to live in this folder
+# ----------------------------------------------------------------------------
+#  A paper written ABOUT this project, not part of it: an unpublished draft,
+#  correspondence, and around twenty third-party papers as PDFs. None of it is
+#  ours to publish, and tools/new-release.ps1 stages with `git add -A`, so
+#  without this line one release would push all of it.
+/docs/paper/

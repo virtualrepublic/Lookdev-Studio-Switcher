@@ -216,7 +216,13 @@ behind it and travels with a clone; this list does not repeat it.
 - **Modifiers/constraints keyed by name**, with an `index` for stack order.
 - **Renames are not creations** — the generator maps `objects.X.data` changes.
 - **Camera data addressed by object name**, never `Camera.001` (load-order suffix).
-- **Phases** — collections → order → camera data → objects → focus → renames →
+- **Renames run before anything that names a data block.** The camera and focus
+  phases address the block by its *new* name, which does not exist until the
+  rename has happened. With renames last, `bpy.data.cameras.get('Camera_large')`
+  returned `None`, `if data:` skipped the whole block and logged nothing, and
+  four of five cameras kept their original values on the first run. Fixed
+  2026-08-15; the generated installer needs regenerating to carry the fix.
+- **Phases** — collections → order → renames → camera data → objects → focus →
   modifiers → scene → compositor nodes → compositor links → install tool →
   install workspace → working space (deferred) → self-remove.
 - **The working space is an operator, and it must not run inside the script.**
@@ -311,9 +317,13 @@ executing the generated code against it** — every bug in the table in
 ## Open items
 
 - [x] Regenerate `setup_lookdev_scene.py` with the current `lookdev_switcher.py`
-      so the GPL headers are embedded. — Done: the `TOOL_SOURCE` block was
-      verified line-by-line against `lookdev_switcher.py` and is identical (892
-      lines). Re-verify that way rather than trusting this checkbox.
+      so the GPL headers are embedded. — Done, re-verified 2026-08-15: the
+      `TOOL_SOURCE` block and `lookdev_switcher.py` are **899 lines** and
+      byte-identical as git stores them (SHA-256 `4df96c2f9cfe3ced…`). Compare
+      them **after normalising line endings**: `make_migration.py` writes the
+      installer in text mode, so the working copy carries CRLF inside the block
+      while `lookdev_switcher.py` is LF — 899 bytes apart, one CR per line, no
+      content difference. Re-verify that way rather than trusting this checkbox.
 - [ ] The copyright line now reads `Prof. Michael Klein` (Amtstitel, part of the
       name — not an academic degree to be dropped in legal notices). It was
       changed in `lookdev_switcher.py` **and** in the embedded copy inside
@@ -323,5 +333,13 @@ executing the generated code against it** — every bug in the table in
       searching Blender's bundled assets is the only part never run for real.
 - [x] A snapshot version stamp so stale snapshots fail loudly instead of a
       traceback. — Done, and a second stamp with it for the installer. See
-      *The one thing that bites* above for both. **The existing `snap_*.json`
-      predate it and are refused**: write them again before generating.
+      *The one thing that bites* above for both. The `snap_*.json` have since
+      been written again and **are current** (checked 2026-08-15: their
+      `dumper_stamp` is `fca630ad01dff1f8…`, which is what `dump_scene.py`
+      hashes to now, and both are newer than `MODIFIED_520.blend`). An earlier
+      note here said they were refused; that is no longer true.
+- [ ] Regenerate `setup_lookdev_scene.py`. The shipped file predates two
+      things: the `TOOLCHAIN STAMP` in the header, and the phase-order fix for
+      the renamed camera data blocks. Every input is present and current, so
+      this is `run.ps1` step 4 alone — **no Blender needed for the generation
+      itself**, only for testing the result afterwards.

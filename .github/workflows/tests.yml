@@ -1,0 +1,79 @@
+name: tests
+
+# Every push and every pull request. The suite needs no Blender: the generator
+# and the differ are plain Python, and the generated code is executed against
+# the fake bpy in tests/fakebpy.py.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows because that is where this is maintained and released, and
+        # because line endings differ there -- the installer is generated in
+        # text mode. Ubuntu because it is the cheap, fast one.
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # No pip install anywhere in this file, on purpose: the suite is standard
+      # library only. Blender is not installed and is not needed.
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+      # pwsh covers defect 12 (release notes cut at any "## "), by lifting
+      # Get-ChangelogNotes out of tools/new-release.ps1 through the PowerShell
+      # parser and running the real function. GitHub's runners have pwsh
+      # preinstalled; the tests fail rather than skip when CI is set, so a
+      # runner without it cannot produce a green build that checked nothing.
+      - name: PowerShell is present
+        run: pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      # What this job does NOT check, printed so a green build is not read as
+      # more than it is.
+      #
+      # Both SHA-256 stamps are verified against files in _local/ -- the
+      # snapshots and the exported interface. _local/ is git-ignored and never
+      # exists in a clone, so neither stamp can be recomputed here. What runs
+      # instead is in tests/test_stamps.py: the refusal logic, the wire format
+      # both sides of the release check depend on, and the one comparison that
+      # does see real files -- the add-on embedded in the installer against
+      # lookdev_switcher.py.
+      - name: What this run could not check
+        shell: bash
+        run: |
+          echo "Not checked here, and not checkable in a clone:"
+          echo "  * dumper_stamp    -- needs _local/snap_*.json"
+          echo "  * TOOLCHAIN STAMP -- needs _local/snap_*.json and"
+          echo "                       _local/workspace_ui.blend"
+          echo "Both are verified on the maintainer's machine by"
+          echo "tools/new-release.ps1, which refuses a stale installer."
+          echo "The logic behind them is covered by tests/test_stamps.py."
+
+  # Not part of the push run: it rewrites tracked source files to reintroduce
+  # each fixed defect, and the question it answers -- do these tests still
+  # notice -- only arises when the tests or the generator change. Start it by
+  # hand from the Actions tab.
+  mutations:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Every fixed defect, put back
+        run: python tests/mutations.py

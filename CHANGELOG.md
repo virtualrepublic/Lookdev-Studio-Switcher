@@ -15,6 +15,118 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ---
 
+## [1.3.1] — 2026-08-15
+
+Four of the five cameras came out of the conversion still carrying the
+**original lens, sensor and depth-of-field values**, and two of the three focus
+objects were never set. The script reported success either way.
+
+### Whether it affected you
+
+The migration renames the camera data blocks — `Camera.003` becomes
+`Camera_large`, and so on. It did that *after* the steps that configure them,
+and those steps look a block up by its new name. They found nothing, skipped
+without a word, and the run still ended `n change(s) applied`.
+
+A second run picked everything up, because by then the renames had happened.
+So if you ran the script twice, as the instructions ask, your scene is almost
+certainly fine. If you ran it once, it is not.
+
+**To check:** open your converted scene, select the camera called `large`, and
+look at its focal length in the camera data properties. It should read
+**100 mm**. If it still reads 50 mm, the settings never landed.
+
+### You have to reconvert
+
+Rerunning the old script on your converted scene also works, but a fresh
+conversion is the one that is tested:
+
+1. Download `setup_lookdev_scene.py` from the assets below.
+2. Open a **fresh copy** of your Studio Lookdev download in Blender 5.2.
+3. *Scripting → Open → `setup_lookdev_scene.py` → Run Script.*
+4. Save under a **new** name, so your original download stays untouched.
+
+Running it twice is still safe, and the second run now genuinely reports
+nothing — which it could not do before, because the first run left work behind.
+
+Nothing else changed: same scene, same panel, same colour handling as 1.3.0.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases
+page.
+
+### Fixed
+- **Renames now run before the phases that address a data block by name.**
+  `Emitter.PHASES` had `renames` at position 6, after `camera_data` (3) and
+  `focus` (5). Both of those emit `bpy.data.cameras.get('<new name>')`, and on
+  a fresh scene the block is still called `Camera`, `Camera.001`, `Camera.002`
+  or `Camera.003` at that point. `get()` returned `None`, the generated
+  `if data:` skipped the entire block, and nothing was logged — the failure
+  mode this project keeps rediscovering: a step that does nothing looks exactly
+  like a step that had nothing to do. `Camera_frame` was unaffected because it
+  is *created* rather than renamed, which is why the symptom was partial and
+  never obvious.
+
+  The rename step needs only the **object**, and an object carrying a rename
+  exists in both snapshots by definition — the rename map is built from
+  `objects.X.data` *changes*, not additions — so nothing that previously came
+  before it was a prerequisite. Moving it to position 3 is the whole fix.
+
+  It also broke a property the release procedure depends on: "run it twice, the
+  second run reports `0 change(s) applied`". The second run applied the skipped
+  settings and reported them, so the check could never have passed on a diff
+  carrying a camera rename. That it was not noticed says the two-run check was
+  read as a formality rather than as evidence.
+
+- **`make_migration.py` reported one line too many** for the embedded add-on:
+  `count("\n") + 1` counts an extra empty line in a file that ends with a
+  newline, so the 899-line switcher was reported as 900 — and that number gets
+  written down. `splitlines()` now.
+
+- **`docs/paper/` is git-ignored.** `tools/new-release.ps1` stages with
+  `git add -A`, which makes every untracked file in the tree a release
+  decision — silently, at the moment of release. A research paper written
+  *about* this project had been sitting in `docs/`: an unpublished draft,
+  correspondence with colleagues, and some twenty third-party papers as PDFs,
+  23 MB in all. The next release would have pushed every byte of it to a public
+  repository. Caught before it happened, and none of it had ever been
+  committed, so nothing had to be removed from the history. The lesson is the
+  general one: a `.gitignore` that blocks `*.blend` says nothing about
+  anything else, and `git add -A` does not ask.
+
+### Added
+- **A test suite, `tests/`, and a GitHub Actions workflow.** Standard library
+  only, no Blender, no dependencies. It executes generated migration code
+  against a fake `bpy` that models the four behaviours the defects actually
+  turn on: float32 storage, read-only properties raising `AttributeError`
+  rather than `TypeError`, enums whose valid values depend on another property,
+  and pointer properties that refuse a string.
+
+  Every bug in the table in `docs/MAINTAINING.md` has a test, and every test
+  has a **mutation** in `tests/mutations.py` that puts the defect back and
+  checks the test notices. All of them were fixed years before the tests
+  existed, so a green suite on its own would only prove the tests run. Thirteen
+  mutations, thirteen caught.
+
+  Three of them — the workspace deletion, the deferred colour space and the
+  image editor — are guards rather than reproductions, and say so in their own
+  docstrings: their symptoms are access violations inside Blender's window
+  manager and a zoom level on screen, and no fake reproduces either. The defect
+  above was found by the suite while the idempotence test was being written.
+
+- **`tests/fakebpy.py`**, which is the thing `CLAUDE.md` had been asking for:
+  the fake `bpy` that caught every generator bug was written ad hoc and lost.
+  It exists in the tree now.
+
+### Note for the next release
+The two SHA-256 stamps cannot be verified in CI — both read files in `_local/`,
+which is git-ignored and never present in a clone. The workflow prints what it
+could not check rather than passing silently. `tools/new-release.ps1` remains
+the only place either stamp is actually recomputed.
+
+---
+
 ## [1.3.0] — 2026-08-10
 
 The scene's **working colour space** now travels. A master scene converted to
@@ -427,7 +539,8 @@ First public release.
   EXR. Both are reversible; see the reference.
 - Built and tested on Blender 5.2 (ACES 2.0 colour management, 5.x compositor).
 
-[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.3...v1.3.0
 [1.2.3]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/virtualrepublic/Lookdev-Studio-Switcher/compare/v1.2.1...v1.2.2

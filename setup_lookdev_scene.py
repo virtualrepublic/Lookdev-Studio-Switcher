@@ -3,6 +3,14 @@
 # ============================================================================
 #  LOOKDEV_STUDIO_ORIGINAL_520.blend  ->  LOOKDEV_STUDIO_MODIFIED_520.blend
 #
+#  TOOLCHAIN STAMP  8b7d23dc195f5a8c7b1b585e0433ee0db639ecc61c644f0aa393cde55a010a0b
+#  make_migration 3dd9aa8c3b78  snap_original fb05702dddf1  snap_modified 279600a92686  switcher 3007b58f5e1c  workspace c1bd8304c174
+#
+#  SHA-256 over everything that went into this file. tools/new-release.ps1
+#  recomputes it and refuses to release when it disagrees -- which means this
+#  file was not regenerated after the toolchain, the snapshots, the add-on or
+#  the interface changed. Do not edit it by hand; regenerate.
+#
 #  Converts the original scene into the reworked layout. Read before running:
 #  this is generated code, and the TODO list at the bottom shows everything the
 #  generator would not guess at.
@@ -154,7 +162,7 @@ def relink(tree, wanted):
 TOOL_NAME = 'lookdev_switcher.py'
 
 TOOL_SOURCE = r'''# ============================================================================
-#  LOOKDEV SWITCHER  v1.3.0
+#  LOOKDEV SWITCHER  v1.3.1
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -212,7 +220,7 @@ TOOL_SOURCE = r'''# ============================================================
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -3384,7 +3392,32 @@ def migrate(scene=None):
             container.children.link(child)
         log('scene root order: MACRO, SMALL, MEDIUM, LARGE, FRAME, RENDER, MODEL')
 
-    print("\n-- 3. Camera data blocks")
+    print("\n-- 3. Data block renames (the phases below use the new names)")
+    # rename data of 'large': Camera.003 -> Camera_large
+    obj = bpy.data.objects.get('large')
+    if obj and obj.data and obj.data.name != 'Camera_large':
+        obj.data.name = 'Camera_large'
+        log('large data Camera.003 -> Camera_large')
+
+    # rename data of 'macro': Camera.001 -> Camera_macro
+    obj = bpy.data.objects.get('macro')
+    if obj and obj.data and obj.data.name != 'Camera_macro':
+        obj.data.name = 'Camera_macro'
+        log('macro data Camera.001 -> Camera_macro')
+
+    # rename data of 'medium': Camera -> Camera_medium
+    obj = bpy.data.objects.get('medium')
+    if obj and obj.data and obj.data.name != 'Camera_medium':
+        obj.data.name = 'Camera_medium'
+        log('medium data Camera -> Camera_medium')
+
+    # rename data of 'small': Camera.002 -> Camera_small
+    obj = bpy.data.objects.get('small')
+    if obj and obj.data and obj.data.name != 'Camera_small':
+        obj.data.name = 'Camera_small'
+        log('small data Camera.002 -> Camera_small')
+
+    print("\n-- 4. Camera data blocks")
     # new camera data: Camera_frame
     data = bpy.data.cameras.get('Camera_frame')
     if data is None:
@@ -3482,7 +3515,7 @@ def migrate(scene=None):
         data.dof.aperture_rotation = 0.0
         data.dof.aperture_ratio = 1.0
 
-    print("\n-- 4. Objects (create, place, link)")
+    print("\n-- 5. Objects (create, place, link)")
     # new object: DOF (EMPTY)
     obj = bpy.data.objects.get('DOF')
     if obj is None:
@@ -3511,7 +3544,7 @@ def migrate(scene=None):
         coll.objects.link(obj)
         log('frame linked into FRAME')
 
-    print("\n-- 5. Focus objects (need the objects above)")
+    print("\n-- 6. Focus objects (need the objects above)")
     # focus object of Camera_frame
     data = bpy.data.cameras.get('Camera_frame')
     target = bpy.data.objects.get('DOF')
@@ -3532,31 +3565,6 @@ def migrate(scene=None):
     if data and target and data.dof.focus_object is not target:
         data.dof.focus_object = target
         log('Camera_small focuses on ROTATION_LINK')
-
-    print("\n-- 6. Data block renames")
-    # rename data of 'large': Camera.003 -> Camera_large
-    obj = bpy.data.objects.get('large')
-    if obj and obj.data and obj.data.name != 'Camera_large':
-        obj.data.name = 'Camera_large'
-        log('large data Camera.003 -> Camera_large')
-
-    # rename data of 'macro': Camera.001 -> Camera_macro
-    obj = bpy.data.objects.get('macro')
-    if obj and obj.data and obj.data.name != 'Camera_macro':
-        obj.data.name = 'Camera_macro'
-        log('macro data Camera.001 -> Camera_macro')
-
-    # rename data of 'medium': Camera -> Camera_medium
-    obj = bpy.data.objects.get('medium')
-    if obj and obj.data and obj.data.name != 'Camera_medium':
-        obj.data.name = 'Camera_medium'
-        log('medium data Camera -> Camera_medium')
-
-    # rename data of 'small': Camera.002 -> Camera_small
-    obj = bpy.data.objects.get('small')
-    if obj and obj.data and obj.data.name != 'Camera_small':
-        obj.data.name = 'Camera_small'
-        log('small data Camera.002 -> Camera_small')
 
     print("\n-- 7. Modifiers")
     # new modifier on 'GPM.005': Subdivision (SUBSURF)

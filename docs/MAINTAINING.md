@@ -142,18 +142,25 @@ it on a fresh copy of `ALBIN_293` before releasing.
 ## What the installer does, in order
 
 Order is not cosmetic. A camera object needs its data block first; a
-`focus_object` needs the empty to exist; a compositor link needs both ends.
+`focus_object` needs the empty to exist; a compositor link needs both ends; and
+the renames come before everything that addresses a data block by name, because
+those steps use the **new** name.
 
 ```
 1  collections            7  modifiers
 2  collection order       8  scene settings
-3  camera data            9  compositor nodes
-4  objects               10  compositor links
-5  focus objects         11  install the add-on
-6  renames               12  install the interface
+3  renames                9  compositor nodes
+4  camera data           10  compositor links
+5  objects               11  install the add-on
+6  focus objects         12  install the interface
                          13  working colour space  (deferred, see below)
                              remove itself
 ```
+
+Renames were once step 6, after the camera phases, and that was wrong: a
+renamed camera data block still carried its old name when
+`bpy.data.cameras.get('Camera_large')` looked for it, so the whole block was
+skipped without a word. See the bug table below.
 
 Every step compares before it acts, so a second run reports
 `0 change(s) applied`. That property is not tidiness — it is the check that
@@ -401,6 +408,12 @@ earned its keep repeatedly; keep using it.
 | Working colour space set inline | Blender crash in `wm_event_do_notifiers` | defer to a timer, after the interface |
 | `image.view_all(fit_view=True)` | zoomed a 256×256 placeholder to fill the editor | set `space.image` to the Viewer node instead |
 | Release notes cut at any `## ` | a version's own sub-heading truncated the published page | stop only at `## [x.y.z]` or end of file |
+| Renames emitted after the phases that use the new names | a **renamed** camera data block kept its original lens, sensor and DOF values on the first run — `get()` found nothing, `if data:` skipped the block, nothing was logged, and the run reported success. Two of three focus objects never set. The second run applied them, so "second run reports 0 changes" could not hold either. | `renames` moved ahead of `camera_data` in `Emitter.PHASES` |
+
+The last one was found on 2026-08-15 by the test suite in `tests/`, not by a
+release run — it had been shipping. The generator is fixed; **the installer in
+the repository still carries it and has to be regenerated** (`run.ps1` step 4)
+before the next release.
 
 ---
 

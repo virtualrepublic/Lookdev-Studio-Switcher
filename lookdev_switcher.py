@@ -1,5 +1,5 @@
 # ============================================================================
-#  LOOKDEV SWITCHER  v1.3.0
+#  LOOKDEV SWITCHER  v1.3.1
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -57,7 +57,7 @@
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",

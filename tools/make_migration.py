@@ -132,8 +132,22 @@ def log_line(message, indent=""):
 class Emitter:
     """Collects generated code in phases so ordering is guaranteed."""
 
-    PHASES = ("collections", "collection_order", "camera_data", "objects",
-              "focus", "renames", "modifiers", "scene",
+    PHASES = ("collections", "collection_order",
+              # Renames FIRST of the datablock phases. A renamed camera data
+              # block is addressed by its new name in camera_data and focus --
+              # bpy.data.cameras.get('Camera_large') -- and that name does not
+              # exist until the rename has run. With the rename last, get()
+              # returned None, the generated `if data:` skipped the whole
+              # block, nothing was logged, and the run reported success: on a
+              # fresh scene four of five cameras kept their original lens,
+              # sensor and depth-of-field values. The second run applied them
+              # and reported changes, so "run it twice, the second reports 0
+              # change(s)" could never hold either. The rename itself needs
+              # only the OBJECT, which exists in both snapshots by definition
+              # -- a rename comes from an objects.X.data CHANGE -- so nothing
+              # below it is a prerequisite for it.
+              "renames", "camera_data", "objects", "focus",
+              "modifiers", "scene",
               # nodes before links: a link needs both ends to exist
               "compositor_nodes", "compositor_links")
 
@@ -167,10 +181,10 @@ class Emitter:
         titles = {
             "collections": "1. Collections",
             "collection_order": "2. Collection order (exact, as in the new scene)",
-            "camera_data": "3. Camera data blocks",
-            "objects": "4. Objects (create, place, link)",
-            "focus": "5. Focus objects (need the objects above)",
-            "renames": "6. Data block renames",
+            "renames": "3. Data block renames (the phases below use the new names)",
+            "camera_data": "4. Camera data blocks",
+            "objects": "5. Objects (create, place, link)",
+            "focus": "6. Focus objects (need the objects above)",
             "modifiers": "7. Modifiers",
             "scene": "8. Scene settings",
             "compositor_nodes": "9. Compositor nodes",
@@ -1863,8 +1877,12 @@ def main():
     print("  toolchain stamp: %s" % stamp[:16])
     print("  %d step(s) generated" % em.count)
     if tool_source:
+        # splitlines(), not count("\n") + 1: the file ends with a newline, and
+        # counting separators then adding one reports an extra empty line. It
+        # said 900 for the 899-line add-on, which is the number that ends up
+        # written down in CLAUDE.md and then disagrees with wc -l.
         print("  embedded tool: %s (%d lines)"
-              % (tool_name, tool_source.count("\n") + 1))
+              % (tool_name, len(tool_source.splitlines())))
     if workspace_data:
         print("  embedded interface: stamp %s" % workspace_stamp)
     todo_count = len([l for l in em.todo if l.startswith("#   ")])
