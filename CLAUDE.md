@@ -135,9 +135,9 @@ instructions. `*.blend` is git-ignored so the scene cannot leak in.
 
 Author: Prof. Michael Klein <professor@virtualrepublic.org>.
 Licence: GPL-3.0-or-later (`bpy` add-ons are derivative works of Blender).
-Current release: `v1.3.2` (tag present, asset uploaded, CI green). **It crashes
-Blender 5.2.1** — see the 1.3.3 entry in `CHANGELOG.md`; the fix is in the tree,
-waiting on a test in 5.2.1 before it is published.
+Current release: `v1.3.3` (tag present, asset uploaded, CI green). It fixes a
+crash on Blender 5.2.1 that 1.3.2 and every release back to 1.3.0 had — see the
+1.3.3 entry in `CHANGELOG.md`. Tested on 5.2.1 on a fresh copy of `ALBIN_293`.
 
 ---
 
