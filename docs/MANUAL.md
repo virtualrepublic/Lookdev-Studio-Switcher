@@ -243,6 +243,11 @@ Transparent film, centimetres, and ACES 2.0 colour management
 with reference gamut compression. Renders are written as **multi-layer EXR**
 (Float Half, DWAB) in ACEScg, next to your own `.blend` file.
 
+The file itself is converted to the **ACEScg working space** a moment after the
+script finishes — every colour in it, the way Blender's own *Set Blend File
+Working Color Space* does it. You will see it reported in the console after
+the change count.
+
 If you would rather have PNG, change it in *Output Properties*. Nothing in the
 panel depends on the format.
 
@@ -253,6 +258,13 @@ A **Film Grain** node was added after the existing colour group, preset to
 grade and the output.
 
 You can mute it (`M`) or delete it — nothing else depends on it.
+
+### Interface
+
+The workspace tabs of the reworked scene come along and replace yours of the
+same name — Layout, Shading, Compositing and so on — and a *Geometry Nodes*
+tab is added. Tabs you made yourself stay. If a tab is left marked
+`[replaced]`, right-click it and choose Delete.
 
 ---
 
@@ -270,6 +282,10 @@ more. In the Text Editor, open `lookdev_switcher.py` and widen:
 ```python
 FRAME_CHECK_FRAMES = (0, 25, 50, 75)
 ```
+
+**There are tabs marked `[replaced]`.**
+Old workspaces the script could not remove. Right-click → Delete. Why is in
+`lookdev_workspace.log.txt` next to your `.blend`.
 
 **A button has the wrong colour.**
 Colours come from the outliner. Change the collection's colour tag there and the

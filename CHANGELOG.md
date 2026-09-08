@@ -15,6 +15,56 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ---
 
+## [Unreleased]
+
+The conversion now **says so when something it meant to configure is not
+there.** Until now a camera, collection, modifier or compositor node the
+script could not find was skipped without a word, and the run still ended
+`n change(s) applied` — the silence that let the 1.3.1 bug ship unnoticed.
+Nothing changes for a correct conversion: same scene, same panel, same values.
+
+Panel and scene are unchanged — **no reconversion is needed** for this alone.
+Should a run ever report `!! … not found`, that is a finding, not noise: the
+scene is not what the script expected. It repeats on a second run on purpose.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases
+page.
+
+### Fixed
+- **A missing target is logged, never skipped silently.** Every configuring
+  step in the generated code — camera data, focus object, rename, collection
+  property and order, modifier, compositor node property, linking a new object
+  into its collection — used to fall through an `if data:` when the lookup
+  failed, and log nothing. The 1.3.1 defect was a wrong *order*, but the
+  *silence* is what hid it through every test conversion. `missing()` in
+  `make_migration.py` now emits `!! <thing> not found -- <consequence>`
+  through `log()`, so it lands in the change count and a second run reports
+  it again; "0 change(s) applied" is no longer reachable while something the
+  migration was meant to touch is not there. The one deliberate exception is
+  the compositor node *removal*: already gone is the normal state of a second
+  run. Test: `tests/test_runtime.AMissingTargetIsReportedNotSkipped`;
+  mutation `silent-skip` puts the `if data:` back and is caught.
+- `tools/new-release.ps1` told you to regenerate with "run.ps1 step 2";
+  generating is step 4.
+
+### Changed
+- **The user documentation caught up with 1.3.0.** README, reference and
+  manual had last been touched at 1.2.1 and said nothing about the two things
+  the installer has done to a user's file since 1.3.0: replacing their
+  workspace tabs (and leaving `[replaced]` tabs and
+  `lookdev_workspace.log.txt` behind when it cannot), and converting every
+  colour in the file to ACEScg a moment after the script ends. Both are
+  described now, with a troubleshooting entry each.
+- `CLAUDE.md` and `docs/MAINTAINING.md` no longer claim the installer still
+  has to be regenerated for 1.3.1 — it was, in the same commit. Both now list
+  `tests/` and how to run the suite and the mutations.
+- The header comment of `make_migration.py` listed the phase order as it was
+  before 1.3.1 (renames fifth). It now matches `Emitter.PHASES`.
+
+---
+
 ## [1.3.1] — 2026-08-15
 
 Four of the five cameras came out of the conversion still carrying the

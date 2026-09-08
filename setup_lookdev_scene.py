@@ -3,8 +3,8 @@
 # ============================================================================
 #  LOOKDEV_STUDIO_ORIGINAL_520.blend  ->  LOOKDEV_STUDIO_MODIFIED_520.blend
 #
-#  TOOLCHAIN STAMP  8b7d23dc195f5a8c7b1b585e0433ee0db639ecc61c644f0aa393cde55a010a0b
-#  make_migration 3dd9aa8c3b78  snap_original fb05702dddf1  snap_modified 279600a92686  switcher 3007b58f5e1c  workspace c1bd8304c174
+#  TOOLCHAIN STAMP  cdec1ca4f6a21f758514c9fb411812c8b2e92c408a323e9323df92f2aa3f8e75
+#  make_migration c7f8215cd5d5  snap_original fb05702dddf1  snap_modified 279600a92686  switcher 3007b58f5e1c  workspace c1bd8304c174
 #
 #  SHA-256 over everything that went into this file. tools/new-release.ps1
 #  recomputes it and refuses to release when it disagrees -- which means this
@@ -3342,13 +3342,17 @@ def migrate(scene=None):
 
     # collection LARGE: color_tag
     coll = bpy.data.collections.get('LARGE')
-    if coll and coll.color_tag != 'COLOR_04':
+    if coll is None:
+        log("!! collection 'LARGE' not found -- color_tag not set")
+    elif coll.color_tag != 'COLOR_04':
         coll.color_tag = 'COLOR_04'
         log('LARGE.color_tag -> COLOR_04')
 
     # collection MEDIUM: color_tag
     coll = bpy.data.collections.get('MEDIUM')
-    if coll and coll.color_tag != 'COLOR_03':
+    if coll is None:
+        log("!! collection 'MEDIUM' not found -- color_tag not set")
+    elif coll.color_tag != 'COLOR_03':
         coll.color_tag = 'COLOR_03'
         log('MEDIUM.color_tag -> COLOR_03')
 
@@ -3364,13 +3368,17 @@ def migrate(scene=None):
 
     # collection RENDER: color_tag
     coll = bpy.data.collections.get('RENDER')
-    if coll and coll.color_tag != 'COLOR_06':
+    if coll is None:
+        log("!! collection 'RENDER' not found -- color_tag not set")
+    elif coll.color_tag != 'COLOR_06':
         coll.color_tag = 'COLOR_06'
         log('RENDER.color_tag -> COLOR_06')
 
     # collection SMALL: color_tag
     coll = bpy.data.collections.get('SMALL')
-    if coll and coll.color_tag != 'COLOR_02':
+    if coll is None:
+        log("!! collection 'SMALL' not found -- color_tag not set")
+    elif coll.color_tag != 'COLOR_02':
         coll.color_tag = 'COLOR_02'
         log('SMALL.color_tag -> COLOR_02')
 
@@ -3388,6 +3396,8 @@ def migrate(scene=None):
             coll = bpy.data.collections.get(name)
             if coll:
                 container.children.link(coll)
+            else:
+                log("!! collection '%s' not found -- left out of the scene root order" % name)
         for child in extras:      # anything unplanned goes last, never lost
             container.children.link(child)
         log('scene root order: MACRO, SMALL, MEDIUM, LARGE, FRAME, RENDER, MODEL')
@@ -3395,25 +3405,33 @@ def migrate(scene=None):
     print("\n-- 3. Data block renames (the phases below use the new names)")
     # rename data of 'large': Camera.003 -> Camera_large
     obj = bpy.data.objects.get('large')
-    if obj and obj.data and obj.data.name != 'Camera_large':
+    if obj is None or obj.data is None:
+        log("!! object 'large' (or its data) not found -- Camera.003 not renamed to Camera_large")
+    elif obj.data.name != 'Camera_large':
         obj.data.name = 'Camera_large'
         log('large data Camera.003 -> Camera_large')
 
     # rename data of 'macro': Camera.001 -> Camera_macro
     obj = bpy.data.objects.get('macro')
-    if obj and obj.data and obj.data.name != 'Camera_macro':
+    if obj is None or obj.data is None:
+        log("!! object 'macro' (or its data) not found -- Camera.001 not renamed to Camera_macro")
+    elif obj.data.name != 'Camera_macro':
         obj.data.name = 'Camera_macro'
         log('macro data Camera.001 -> Camera_macro')
 
     # rename data of 'medium': Camera -> Camera_medium
     obj = bpy.data.objects.get('medium')
-    if obj and obj.data and obj.data.name != 'Camera_medium':
+    if obj is None or obj.data is None:
+        log("!! object 'medium' (or its data) not found -- Camera not renamed to Camera_medium")
+    elif obj.data.name != 'Camera_medium':
         obj.data.name = 'Camera_medium'
         log('medium data Camera -> Camera_medium')
 
     # rename data of 'small': Camera.002 -> Camera_small
     obj = bpy.data.objects.get('small')
-    if obj and obj.data and obj.data.name != 'Camera_small':
+    if obj is None or obj.data is None:
+        log("!! object 'small' (or its data) not found -- Camera.002 not renamed to Camera_small")
+    elif obj.data.name != 'Camera_small':
         obj.data.name = 'Camera_small'
         log('small data Camera.002 -> Camera_small')
 
@@ -3441,7 +3459,9 @@ def migrate(scene=None):
 
     # configure camera data: Camera_large
     data = bpy.data.cameras.get('Camera_large')
-    if data:
+    if data is None:
+        log("!! camera data 'Camera_large' not found -- nothing set")
+    else:
         data.lens = 100.0
         data.lens_unit = 'MILLIMETERS'
         data.sensor_fit = 'AUTO'
@@ -3460,7 +3480,9 @@ def migrate(scene=None):
 
     # configure camera data: Camera_macro
     data = bpy.data.cameras.get('Camera_macro')
-    if data:
+    if data is None:
+        log("!! camera data 'Camera_macro' not found -- nothing set")
+    else:
         data.lens = 150.0
         data.lens_unit = 'MILLIMETERS'
         data.sensor_fit = 'AUTO'
@@ -3479,7 +3501,9 @@ def migrate(scene=None):
 
     # configure camera data: Camera_medium
     data = bpy.data.cameras.get('Camera_medium')
-    if data:
+    if data is None:
+        log("!! camera data 'Camera_medium' not found -- nothing set")
+    else:
         data.lens = 100.0
         data.lens_unit = 'MILLIMETERS'
         data.sensor_fit = 'AUTO'
@@ -3498,7 +3522,9 @@ def migrate(scene=None):
 
     # configure camera data: Camera_small
     data = bpy.data.cameras.get('Camera_small')
-    if data:
+    if data is None:
+        log("!! camera data 'Camera_small' not found -- nothing set")
+    else:
         data.lens = 150.0
         data.lens_unit = 'MILLIMETERS'
         data.sensor_fit = 'AUTO'
@@ -3527,7 +3553,9 @@ def migrate(scene=None):
     obj.rotation_euler = (0.0, 0.0, 0.0)
     obj.scale = (1.0, 1.0, 1.0)
     coll = bpy.data.collections.get('FRAME')
-    if coll and 'DOF' not in coll.objects:
+    if coll is None:
+        log("!! collection 'FRAME' not found -- 'DOF' not linked into it")
+    elif 'DOF' not in coll.objects:
         coll.objects.link(obj)
         log('DOF linked into FRAME')
 
@@ -3540,7 +3568,9 @@ def migrate(scene=None):
     obj.rotation_euler = (1.35075, -0.0, 0.0)
     obj.scale = (1.0, 1.0, 1.0)
     coll = bpy.data.collections.get('FRAME')
-    if coll and 'frame' not in coll.objects:
+    if coll is None:
+        log("!! collection 'FRAME' not found -- 'frame' not linked into it")
+    elif 'frame' not in coll.objects:
         coll.objects.link(obj)
         log('frame linked into FRAME')
 
@@ -3548,21 +3578,33 @@ def migrate(scene=None):
     # focus object of Camera_frame
     data = bpy.data.cameras.get('Camera_frame')
     target = bpy.data.objects.get('DOF')
-    if data and target and data.dof.focus_object is not target:
+    if data is None:
+        log("!! camera data 'Camera_frame' not found -- focus not set")
+    elif target is None:
+        log("!! focus object 'DOF' not found -- focus of 'Camera_frame' not set")
+    elif data.dof.focus_object is not target:
         data.dof.focus_object = target
         log('Camera_frame focuses on DOF')
 
     # focus object of Camera_macro
     data = bpy.data.cameras.get('Camera_macro')
     target = bpy.data.objects.get('ROTATION_LINK')
-    if data and target and data.dof.focus_object is not target:
+    if data is None:
+        log("!! camera data 'Camera_macro' not found -- focus not set")
+    elif target is None:
+        log("!! focus object 'ROTATION_LINK' not found -- focus of 'Camera_macro' not set")
+    elif data.dof.focus_object is not target:
         data.dof.focus_object = target
         log('Camera_macro focuses on ROTATION_LINK')
 
     # focus object of Camera_small
     data = bpy.data.cameras.get('Camera_small')
     target = bpy.data.objects.get('ROTATION_LINK')
-    if data and target and data.dof.focus_object is not target:
+    if data is None:
+        log("!! camera data 'Camera_small' not found -- focus not set")
+    elif target is None:
+        log("!! focus object 'ROTATION_LINK' not found -- focus of 'Camera_small' not set")
+    elif data.dof.focus_object is not target:
         data.dof.focus_object = target
         log('Camera_small focuses on ROTATION_LINK')
 
@@ -3684,6 +3726,8 @@ def migrate(scene=None):
                 mod.uv_smooth = 'PRESERVE_BOUNDARIES'
             except (AttributeError, TypeError):
                 pass    # read-only or unknown in this version
+    else:
+        log("!! object 'GPM.005' not found -- modifier Subdivision not added")
 
     # new modifier on 'TTPM': Subdivision (SUBSURF)
     obj = bpy.data.objects.get('TTPM')
@@ -3802,6 +3846,8 @@ def migrate(scene=None):
                 mod.uv_smooth = 'PRESERVE_BOUNDARIES'
             except (AttributeError, TypeError):
                 pass    # read-only or unknown in this version
+    else:
+        log("!! object 'TTPM' not found -- modifier Subdivision not added")
 
     print("\n-- 8. Scene settings")
     # view_settings.view_transform
@@ -4061,14 +4107,18 @@ def migrate(scene=None):
     # compositor node Group: location
     tree = compositor_tree(scene)
     node = tree.nodes.get('Group') if tree else None
-    if node is not None and any(abs(a - b) > max(1e-6, abs(b) * 1e-6) for a, b in zip(node.location, (70.35431, 105.4958))):
+    if node is None:
+        log("!! compositor node 'Group' not found -- location not set")
+    elif any(abs(a - b) > max(1e-6, abs(b) * 1e-6) for a, b in zip(node.location, (70.35431, 105.4958))):
         node.location = (70.35431, 105.4958)
         log('compositor Group.location -> [70.35431, 105.4958]')
 
     # compositor node Group Output: location
     tree = compositor_tree(scene)
     node = tree.nodes.get('Group Output') if tree else None
-    if node is not None and any(abs(a - b) > max(1e-6, abs(b) * 1e-6) for a, b in zip(node.location, (841.95679, 151.70752))):
+    if node is None:
+        log("!! compositor node 'Group Output' not found -- location not set")
+    elif any(abs(a - b) > max(1e-6, abs(b) * 1e-6) for a, b in zip(node.location, (841.95679, 151.70752))):
         node.location = (841.95679, 151.70752)
         log('compositor Group Output.location -> [841.95679, 151.70752]')
 
@@ -4082,7 +4132,9 @@ def migrate(scene=None):
     # compositor node Viewer: location
     tree = compositor_tree(scene)
     node = tree.nodes.get('Viewer') if tree else None
-    if node is not None and any(abs(a - b) > max(1e-6, abs(b) * 1e-6) for a, b in zip(node.location, (842.70465, 40.07054))):
+    if node is None:
+        log("!! compositor node 'Viewer' not found -- location not set")
+    elif any(abs(a - b) > max(1e-6, abs(b) * 1e-6) for a, b in zip(node.location, (842.70465, 40.07054))):
         node.location = (842.70465, 40.07054)
         log('compositor Viewer.location -> [842.70465, 40.07054]')
 

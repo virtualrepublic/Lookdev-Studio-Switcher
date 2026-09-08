@@ -106,6 +106,11 @@ Lookdev-Studio-Switcher\
 │   │                           (all three diagnostic, not part of a release run)
 │   ├── run.ps1                 THE ENTRY POINT -- the steps, one per run
 │   └── new-release.ps1         release helper (PowerShell)
+├── tests\                      the suite: no Blender, standard library only
+│   ├── fakebpy.py              the fake bpy the generated code is executed against
+│   ├── mutations.py            puts every fixed defect back, checks the tests notice
+│   └── test_*.py               one class per defect in docs\MAINTAINING.md
+├── .github\workflows\tests.yml CI: the suite on every push, Ubuntu + Windows
 ├── _CLAUDE_\                   WORKFLOW (local steps), VibeCoding .docx — git-ignored
 ├── _BACKUP_\                   V000, V100, _notes, v1.0.0 zip — git-ignored
 └── _local\                     the .blend scenes and diff output — git-ignored
@@ -130,7 +135,7 @@ instructions. `*.blend` is git-ignored so the scene cannot leak in.
 
 Author: Prof. Michael Klein <professor@virtualrepublic.org>.
 Licence: GPL-3.0-or-later (`bpy` add-ons are derivative works of Blender).
-Current release: `v1.3.0` (tag present, asset uploaded).
+Current release: `v1.3.1` (tag present, asset uploaded, CI green).
 
 ---
 
@@ -247,6 +252,13 @@ behind it and travels with a clone; this list does not repeat it.
 - **Generated code catches `(AttributeError, TypeError)`** and logs skips — so a
   skipped setting can look like success. When something *should* land and the log
   says "skipped", do not believe it, check. (This nearly lost ACEScg.)
+- **A target that is not there is logged, never skipped.** Every configuring
+  step looks its target up by name; when that fails, `missing()` in
+  `make_migration.py` emits `!! … not found -- …` through `log()`, so it counts
+  and repeats on a second run. That is intended: "0 change(s) applied" must not
+  be reachable while something is absent. The old `if data:` silence is what hid
+  the 1.3.1 phase-order bug through every test conversion. Do not reintroduce
+  it; the `silent-skip` mutation checks.
 - **Never delete a workspace from inside the running script.** Deleting one frees
   its screens and areas; the script runs inside `bpy.ops.text.run_script()`, and
   when that operator finishes Blender builds its redo panel for the area it ran
@@ -289,9 +301,19 @@ behind it and travels with a clone; this list does not repeat it.
 
 ## Verifying generator changes
 
-No Blender here. Generator bugs were caught by **writing a fake `bpy` and
-executing the generated code against it** — every bug in the table in
-`docs/MAINTAINING.md`, not by reading. Keep doing that.
+No Blender here. Generator bugs were caught by **executing the generated code
+against a fake `bpy`**, not by reading — every bug in the table in
+`docs/MAINTAINING.md`. That fake is `tests/fakebpy.py`; the suite runs without
+Blender and without a single dependency:
+
+    python -m unittest discover -s tests -v     # 106 tests, about 15 s
+    python tests/mutations.py                   # every fixed defect put back;
+                                                # each must be caught (15 of 15)
+
+CI (`.github/workflows/tests.yml`) runs the suite on every push, Ubuntu and
+Windows. A generator change gets a test that fails without it — show the red
+run before the green one. What the suite cannot see: both stamps (they read
+`_local\`), and anything that only happens inside Blender's window manager.
 
 ---
 
@@ -338,8 +360,12 @@ executing the generated code against it** — every bug in the table in
       `dumper_stamp` is `fca630ad01dff1f8…`, which is what `dump_scene.py`
       hashes to now, and both are newer than `MODIFIED_520.blend`). An earlier
       note here said they were refused; that is no longer true.
-- [ ] Regenerate `setup_lookdev_scene.py`. The shipped file predates two
-      things: the `TOOLCHAIN STAMP` in the header, and the phase-order fix for
-      the renamed camera data blocks. Every input is present and current, so
-      this is `run.ps1` step 4 alone — **no Blender needed for the generation
-      itself**, only for testing the result afterwards.
+- [x] Regenerate `setup_lookdev_scene.py` after the stamp and the phase-order
+      fix. — Done with 1.3.1 (2026-08-15): the shipped file carries a
+      `TOOLCHAIN STAMP` that matches every input, phase 3 is the renames, and
+      the fresh conversion was run in Blender afterwards
+      (`_local\scenes\lookdev_workspace.log.txt`, 14:25 — all ten old tabs
+      removed, sidebar on `Lookdev`). Regenerated once more on 2026-09-08 after
+      a comment-only change to `make_migration.py`: the body came out
+      byte-identical, only the stamp lines moved. Re-verify by recomputing the
+      stamp (`new-release.ps1` does), not by trusting this checkbox.

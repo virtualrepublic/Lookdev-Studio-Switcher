@@ -272,9 +272,8 @@ class ARenamedCameraDataBlockIsRenamedFirst(unittest.TestCase):
     both snapshots by definition -- the rename map is built from `objects.X.data`
     CHANGES -- so nothing that used to precede it was a prerequisite.
 
-    THE INSTALLER IN THE REPOSITORY STILL HAS THE DEFECT. It is generated, and
-    regenerating it needs `_local/` and a Blender that is not in this
-    environment. Until then the fix exists in the generator only.
+    The installer was regenerated with the fix and shipped as 1.3.1 the same
+    day. The line numbers above describe the file as it was.
 
     Mutation: rename-phase-last
     """
@@ -335,6 +334,83 @@ class ARenamedCameraDataBlockIsRenamedFirst(unittest.TestCase):
         self.assertLess(rename, configure,
                         "the camera data block is addressed by its new name "
                         "before the rename that gives it that name")
+
+
+class AMissingTargetIsReportedNotSkipped(unittest.TestCase):
+    """Defect 14. The silence behind defect 13, found while fixing it.
+
+    Every configuring step looks its target up by name. When the lookup failed,
+    the generated code fell through an `if data:` and logged nothing -- so a
+    step that did nothing was indistinguishable from a step that had nothing
+    to do, and the run reported success. That is how defect 13 shipped for as
+    long as the renames existed: the wrong ORDER was the cause, but the SILENCE
+    is what kept it invisible through every test conversion.
+
+    A missing target is now logged with the "!!" prefix, through log(), so it
+    lands in the change count and a second run reports it again. That is the
+    intended behaviour, not a failure of idempotence: a block missing on the
+    first run is missing on the second, and "0 change(s) applied" must not be
+    reachable while something the migration was meant to touch is not there.
+
+    Mutation: silent-skip
+    """
+
+    BEFORE = ARenamedCameraDataBlockIsRenamedFirst.BEFORE
+    AFTER = ARenamedCameraDataBlockIsRenamedFirst.AFTER
+
+    def a_file_without_the_camera(self):
+        """Not the Studio Lookdev scene: no 'medium' object, no camera data."""
+        bpy = fakebpy.make(scene=a_scene())
+        bpy.data.objects.add(fakebpy.Object("DOF"))
+        return bpy
+
+    def a_file_without_the_focus_object(self):
+        """The camera is there, the empty it is to focus on is not."""
+        bpy = fakebpy.make(scene=a_scene())
+        camera_data = fakebpy.CameraData("Camera")
+        camera = fakebpy.Object("medium", type='CAMERA')
+        camera.data = camera_data
+        bpy.data.cameras.add(camera_data)
+        bpy.data.objects.add(camera)
+        return bpy
+
+    def source(self):
+        return generate_from_snapshots(self.BEFORE, self.AFTER)
+
+    def test_a_missing_camera_data_block_is_reported(self):
+        bpy = self.a_file_without_the_camera()
+        _module, changes = run_generated(self.source(), bpy)
+        self.assertIn("!! camera data 'Camera_medium' not found -- nothing set",
+                      logged(changes))
+
+    def test_a_missing_rename_target_is_reported(self):
+        bpy = self.a_file_without_the_camera()
+        _module, changes = run_generated(self.source(), bpy)
+        self.assertIn("!! object 'medium' (or its data) not found",
+                      logged(changes))
+
+    def test_a_missing_focus_object_is_reported(self):
+        bpy = self.a_file_without_the_focus_object()
+        _module, changes = run_generated(self.source(), bpy)
+        self.assertIn("!! focus object 'DOF' not found -- focus of "
+                      "'Camera_medium' not set", logged(changes))
+
+    def test_it_is_reported_on_every_run(self):
+        # Deliberately NOT idempotent: what is missing stays missing, and the
+        # second run must say so as loudly as the first.
+        bpy = self.a_file_without_the_camera()
+        first, second = run_twice(self.source(), bpy)
+        self.assertEqual(first, second)
+        self.assertTrue(all(line.startswith("!!") for line in second),
+                        logged(second))
+
+    def test_a_complete_file_reports_nothing_missing(self):
+        # The guard must stay silent on the normal route, or it is noise.
+        bpy = self.a_file_without_the_focus_object()
+        bpy.data.objects.add(fakebpy.Object("DOF"))
+        _module, changes = run_generated(self.source(), bpy)
+        self.assertFalse(any("not found" in line for line in changes),
+                         logged(changes))
 
 
 class LinksAreMadeAfterTheNodesExist(unittest.TestCase):

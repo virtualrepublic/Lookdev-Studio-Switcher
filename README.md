@@ -48,6 +48,19 @@ expect those parts to be skipped.
 It rebuilds the scene, installs the Lookdev Switcher into it, opens the tool in
 the Text Editor, and then deletes itself. It is a one-shot job.
 
+Two things it changes beyond the scene itself, so they do not surprise you:
+
+- **The interface.** It brings the workspace tabs of the reworked scene along —
+  Layout, Shading, Compositing and the rest — and **replaces** yours of the
+  same name; a *Geometry Nodes* tab is added. Tabs it does not know are left
+  alone. An old tab Blender would not let it delete stays behind marked
+  `[replaced]` — right-click → Delete. What happened is written to
+  `lookdev_workspace.log.txt` next to your `.blend`.
+- **The working colour space.** The file is converted to **ACEScg** a moment
+  after the rest — every material, light and world colour, the way Blender's
+  own *Set Blend File Working Color Space* does it. It reports in the console
+  below the `n change(s) applied` line.
+
 Every step checks before it acts, so running it twice is harmless. It also
 verifies it's looking at the right scene first and refuses to touch anything
 else.
@@ -155,6 +168,12 @@ Your Blender ships a different colour config. Everything else still applies.
 The script could not find Blender's bundled Film Grain asset. Add it once by hand
 in the Compositor via *Add → Group → Film Grain*, then run the script again.
 Everything else was applied regardless.
+
+**My workspace tabs changed, and some are marked `[replaced]`.**
+The script ships the reworked scene's interface and swaps out your tabs of the
+same name. A tab marked `[replaced]` is an old one Blender would not let the
+script delete — right-click it → Delete. `lookdev_workspace.log.txt` next to
+your `.blend` says what happened and why.
 
 **My renders are gone / are EXR files.**
 They are next to your `.blend`, as multi-layer EXR. Change it in *Output

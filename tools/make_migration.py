@@ -18,14 +18,20 @@
 #         blender --background --python make_migration.py -- a.json b.json -o out.py)
 #     3. Read it, then run it in Blender on the original scene.
 #
-#  ORDER MATTERS, so the output is built in PHASES:
-#     1 collections      before anything gets linked into them
-#     2 camera data      before a camera object can reference it
-#     3 objects          create, place, link into their collections
-#     4 focus objects    only now do the empties a camera focuses on exist
-#     5 renames          data blocks, addressed via their OBJECT name
-#     6 modifiers
-#     7 scene settings
+#  ORDER MATTERS, so the output is built in PHASES. Emitter.PHASES is the
+#  authority; this is the summary:
+#     1 collections        before anything gets linked into them
+#     2 collection order
+#     3 renames            data blocks, addressed via their OBJECT name -- and
+#                          BEFORE anything that looks a block up by its NEW name
+#     4 camera data        before a camera object can reference it
+#     5 objects            create, place, link into their collections
+#     6 focus objects      only now do the empties a camera focuses on exist
+#     7 modifiers
+#     8 scene settings     in a defined order, see SCENE_PROP_ORDER
+#     9 compositor nodes  10 compositor links   (a link needs both ends)
+#    then the tool, the interface, the working colour space (deferred to a
+#    timer -- see WORKING_SPACE_BLOCK), and the script removes itself.
 #
 #  WHAT IT WILL NOT DO
 #  It refuses to guess. Only EMPTY and CAMERA objects are generated -- they
@@ -310,10 +316,35 @@ def gen_collection_added(em, name, data):
     em.step("collections", lines, "new collection: %s" % name)
 
 
+# --- a missing target is reported, never skipped ----------------------------
+#  Every step that configures something that should already exist looks it up
+#  by name first. When the lookup failed, the step used to fall through an
+#  `if data:` and log NOTHING -- and a step that does nothing is
+#  indistinguishable from a step that had nothing to do. That silence hid the
+#  1.3.1 defect for as long as the renames had existed: four cameras kept their
+#  original values, the run reported success, and only the second run, which
+#  suddenly had work to do, gave it away.
+#
+#  So a missing target is logged with the "!!" prefix, through log() and not
+#  print(), on purpose: it lands in the change count, and a second run reports
+#  it again. That is correct -- a block missing on the first run is missing on
+#  the second, and "0 change(s) applied" must not be reachable while something
+#  the migration was meant to touch is not there.
+#
+#  The one deliberate exception is gen_compositor_node_removed(): a node that
+#  is already gone is the normal state of a second run.
+
+def missing(what, consequence):
+    """The log line for a target that is not there."""
+    return log_line("!! %s not found -- %s" % (what, consequence))
+
+
 def gen_collection_prop(em, name, prop, new):
     em.step("collections", [
         'coll = bpy.data.collections.get(%s)' % lit(name),
-        'if coll and coll.%s != %s:' % (prop, lit(new)),
+        'if coll is None:',
+        '    ' + missing("collection '%s'" % name, "%s not set" % prop),
+        'elif coll.%s != %s:' % (prop, lit(new)),
         '    coll.%s = %s' % (prop, lit(new)),
         '    ' + log_line("%s.%s -> %s" % (name, prop, new)),
     ], "collection %s: %s" % (name, prop))
@@ -344,6 +375,9 @@ def gen_collection_order(em, container_expr, desired, label):
         '        coll = bpy.data.collections.get(name)',
         '        if coll:',
         '            container.children.link(coll)',
+        '        else:',
+        '            log(%s %% name)' % lit("!! collection '%s' not found -- "
+                                             "left out of the " + label + " order"),
         '    for child in extras:      # anything unplanned goes last, never lost',
         '        container.children.link(child)',
         '    ' + log_line("%s order: %s" % (label, ", ".join(desired))),
@@ -361,18 +395,27 @@ def gen_camera_data(em, data_name, cam, create):
             '    ' + log_line("camera data %s created" % data_name),
         ]
     else:
+        # A block that is configured rather than created must already be
+        # there -- renamed by phase 3, or present in the original. If it is
+        # not, say so: this is exactly the silence that let 1.3.1 ship.
         lines += [
             'data = bpy.data.cameras.get(%s)' % lit(data_name),
-            'if data:',
+            'if data is None:',
+            '    ' + missing("camera data '%s'" % data_name, "nothing set"),
+            'else:',
         ]
     indent = "" if create else "    "
+    settings = []
     for prop in CAMERA_PROPS:
         if prop in cam:
-            lines.append('%sdata.%s = %s' % (indent, prop, lit(cam[prop])))
+            settings.append('%sdata.%s = %s' % (indent, prop, lit(cam[prop])))
     dof = cam.get("dof") or {}
     for prop in DOF_PROPS:
         if prop in dof:
-            lines.append('%sdata.dof.%s = %s' % (indent, prop, lit(dof[prop])))
+            settings.append('%sdata.dof.%s = %s' % (indent, prop, lit(dof[prop])))
+    if not settings and not create:
+        settings.append('    pass')
+    lines += settings
     em.step("camera_data", lines,
             "%s camera data: %s" % ("new" if create else "configure", data_name))
 
@@ -381,7 +424,12 @@ def gen_camera_focus(em, data_name, focus_name):
     em.step("focus", [
         'data = bpy.data.cameras.get(%s)' % lit(data_name),
         'target = bpy.data.objects.get(%s)' % lit(focus_name),
-        'if data and target and data.dof.focus_object is not target:',
+        'if data is None:',
+        '    ' + missing("camera data '%s'" % data_name, "focus not set"),
+        'elif target is None:',
+        '    ' + missing("focus object '%s'" % focus_name,
+                         "focus of '%s' not set" % data_name),
+        'elif data.dof.focus_object is not target:',
         '    data.dof.focus_object = target',
         '    ' + log_line("%s focuses on %s" % (data_name, focus_name)),
     ], "focus object of %s" % data_name)
@@ -421,7 +469,10 @@ def gen_object_added(em, name, obj):
     for coll_name in obj.get("users_collection", []):
         lines += [
             'coll = bpy.data.collections.get(%s)' % lit(coll_name),
-            'if coll and %s not in coll.objects:' % lit(name),
+            'if coll is None:',
+            '    ' + missing("collection '%s'" % coll_name,
+                             "'%s' not linked into it" % name),
+            'elif %s not in coll.objects:' % lit(name),
             '    coll.objects.link(obj)',
             '    ' + log_line("%s linked into %s" % (name, coll_name)),
         ]
@@ -437,7 +488,10 @@ def gen_object_data_rename(em, obj_name, old, new):
     """
     em.step("renames", [
         'obj = bpy.data.objects.get(%s)' % lit(obj_name),
-        'if obj and obj.data and obj.data.name != %s:' % lit(new),
+        'if obj is None or obj.data is None:',
+        '    ' + missing("object '%s' (or its data)" % obj_name,
+                         "%s not renamed to %s" % (old, new)),
+        'elif obj.data.name != %s:' % lit(new),
         '    obj.data.name = %s' % lit(new),
         '    ' + log_line("%s data %s -> %s" % (obj_name, old, new)),
     ], "rename data of '%s': %s -> %s" % (obj_name, old, new))
@@ -468,6 +522,11 @@ def gen_modifier_added(em, obj_name, mod_name, data):
             '        except (AttributeError, TypeError):',
             '            pass    # read-only or unknown in this version',
         ]
+    lines += [
+        'else:',
+        '    ' + missing("object '%s'" % obj_name,
+                         "modifier %s not added" % mod_name),
+    ]
     em.step("modifiers", lines,
             "new modifier on '%s': %s (%s)" % (obj_name, mod_name, mod_type))
     return True
@@ -479,7 +538,10 @@ def gen_modifier_prop(em, obj_name, mod_name, prop, new):
     em.step("modifiers", [
         'obj = bpy.data.objects.get(%s)' % lit(obj_name),
         'mod = obj.modifiers.get(%s) if obj else None' % lit(mod_name),
-        'if mod and getattr(mod, %s, None) != %s:' % (lit(prop), lit(new)),
+        'if mod is None:',
+        '    ' + missing("modifier '%s' on '%s'" % (mod_name, obj_name),
+                         "%s not set" % prop),
+        'elif getattr(mod, %s, None) != %s:' % (lit(prop), lit(new)),
         '    try:',
         '        mod.%s = %s' % (prop, lit(new)),
         '        ' + log_line("%s: %s.%s -> %s" % (obj_name, mod_name, prop, new)),
@@ -603,13 +665,15 @@ def gen_compositor_node_prop(em, name, prop, new):
     # snapshot -- compared exactly it never matches and the node is "moved" to
     # where it already is on every run. Same tolerance as the scene properties.
     if prop == "location":
-        test = ('if node is not None and any(abs(a - b) > max(1e-6, abs(b) * 1e-6)'
+        test = ('elif any(abs(a - b) > max(1e-6, abs(b) * 1e-6)'
                 ' for a, b in zip(node.location, %s)):' % (value,))
     else:
-        test = 'if node is not None and node.%s != %s:' % (prop, value)
+        test = 'elif node.%s != %s:' % (prop, value)
     em.step("compositor_nodes", [
         'tree = compositor_tree(scene)',
         'node = tree.nodes.get(%s) if tree else None' % lit(name),
+        'if node is None:',
+        '    ' + missing("compositor node '%s'" % name, "%s not set" % prop),
         test,
         '    node.%s = %s' % (prop, value),
         '    ' + log_line("compositor %s.%s -> %s" % (name, prop, new)),

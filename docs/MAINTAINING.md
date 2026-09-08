@@ -349,6 +349,20 @@ run reports *"skipped"* while the scene keeps the wrong format.
 A skipped setting therefore looks like success. When something *should* land and
 the log says "skipped", do not believe it — check. This nearly lost ACEScg twice.
 
+### A target that is not there is reported, not skipped
+
+The other half of the same problem. Every configuring step looks its target up
+by name — `bpy.data.cameras.get('Camera_large')` — and used to fall through an
+`if data:` when that returned `None`, logging nothing. `missing()` in
+`make_migration.py` now emits `!! <thing> not found -- <consequence>` through
+`log()`, deliberately: it lands in the change count, and a second run reports
+it again, because a block missing on the first run is missing on the second.
+"0 change(s) applied" is not reachable while something the migration was meant
+to touch is absent. The one exception is the compositor node *removal* — already
+gone is the normal state of a second run. A `!! … not found` in a real
+conversion means the scene is not what the script expected; treat it as a
+finding.
+
 ### `bpy.ops` raises only when the poll fails
 
 An operator that declines does it silently with `{'CANCELLED'}`, so "no
@@ -409,11 +423,32 @@ earned its keep repeatedly; keep using it.
 | `image.view_all(fit_view=True)` | zoomed a 256×256 placeholder to fill the editor | set `space.image` to the Viewer node instead |
 | Release notes cut at any `## ` | a version's own sub-heading truncated the published page | stop only at `## [x.y.z]` or end of file |
 | Renames emitted after the phases that use the new names | a **renamed** camera data block kept its original lens, sensor and DOF values on the first run — `get()` found nothing, `if data:` skipped the block, nothing was logged, and the run reported success. Two of three focus objects never set. The second run applied them, so "second run reports 0 changes" could not hold either. | `renames` moved ahead of `camera_data` in `Emitter.PHASES` |
+| A missing target skipped without a word | the silence behind the row above: every configuring step fell through an `if data:` when its lookup failed, so a step that did nothing looked like a step that had nothing to do — through every test conversion | `missing()` emits `!! … not found -- …` through `log()`, so it counts, and repeats on a second run |
 
 The last one was found on 2026-08-15 by the test suite in `tests/`, not by a
-release run — it had been shipping. The generator is fixed; **the installer in
-the repository still carries it and has to be regenerated** (`run.ps1` step 4)
-before the next release.
+release run — it had been shipping for as long as the renames had existed.
+Fixed, regenerated and released as 1.3.1 the same day.
+
+### Running the tests
+
+Standard library only, no Blender:
+
+    python -m unittest discover -s tests -v     # the suite
+    python tests/mutations.py                   # every fixed defect put back;
+                                                # each must be caught
+
+`tests/fakebpy.py` is the fake `bpy`. It models the four behaviours the
+defects turn on — float32 storage, read-only properties raising
+`AttributeError`, enums whose valid values depend on another property, pointer
+properties that refuse a string — and nothing more; a test that needs something
+else adds it there. `tests/_support.py` runs a generated script the way *Run
+Script* does: one fresh module per run, so the second run of an idempotence
+test cannot inherit the first run's change list.
+
+CI (`.github/workflows/tests.yml`) runs the suite on every push, on Ubuntu and
+Windows; the mutation run is started by hand from the Actions tab. Neither
+stamp can be checked in CI — both read `_local/` — and the workflow prints that
+rather than passing silently.
 
 ---
 

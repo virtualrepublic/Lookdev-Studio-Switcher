@@ -259,6 +259,14 @@ back, change it in *Output Properties* — the switcher does not care either way
 `render.filepath` is set to `//` — the folder your `.blend` sits in, Blender's
 own neutral default. Nothing of my project directory travels with the script.
 
+**The working colour space converts data, not just a setting.** Setting it to
+ACEScg converts every colour in the file — materials, lights, world — exactly
+as Blender's own *Set Blend File Working Color Space* dialog does with *Convert
+Colors* ticked. The step runs a moment *after* the script, in a timer, once the
+interface has settled (run inline it crashed Blender), and reports on its own
+line below `n change(s) applied` — so it is not part of that count. A file
+already in ACEScg is left alone, which is what keeps a second run silent.
+
 ### Compositor
 
 A **Film Grain** node is added between the existing group and the output, and the
@@ -275,6 +283,30 @@ If your Blender has no such asset, the script reports:
 > `!! node group 'Film Grain' not found -- add it by hand from Add > Group, then rerun`
 
 Nothing else is affected; the rest of the conversion still applies.
+
+### Interface
+
+The reworked scene's workspaces travel with the script — appended, not
+rebuilt: the API cannot create screen areas, but it can append finished
+workspaces from a `.blend`, and one is embedded in the script (interface data
+only; no geometry, materials or images come with it).
+
+- A workspace of the same name is **replaced**, so you end up with one
+  `Layout`, not `Layout` and `Layout.001`. Workspaces you have and the script
+  does not are left alone. *Geometry Nodes* is added.
+- The old tabs are deleted a moment after the script has finished, from a
+  timer. Deleting one *while* the script runs frees the area the script is
+  executing in, and Blender crashes when it tries to draw the redo panel there.
+- A tab that could not be deleted stays marked `[replaced]` — right-click →
+  Delete.
+
+What travels is the structure: areas, splits, editor types, sizes. What cannot
+travel, because the API exposes neither, is the outliner's expanded/collapsed
+state and a region's pan and zoom. Outliners are collapsed and node trees
+framed instead — an approximation, not a copy of the master's view.
+
+The whole step is written to `lookdev_workspace.log.txt` next to your `.blend`,
+because on Windows the console is hidden unless you open it.
 
 ---
 
@@ -321,6 +353,15 @@ The Film Grain node group ships with Blender as an Essentials asset, and the
 script could not find it in your installation. Add it once by hand in the
 Compositor via *Add → Group → Film Grain*, then run the script again. Everything
 else was applied regardless.
+
+**Tabs marked `[replaced]`.**
+Old workspaces the script could not delete. Right-click → Delete. The reason is
+in `lookdev_workspace.log.txt` next to your `.blend`.
+
+**The colour conversion is missing from the change count.**
+By design: it runs after the script, in a timer, and reports on its own line.
+Check *Render Properties → Color Management → Working Space*: it should read
+ACEScg.
 
 **Renders are slow now.**
 Sampling is at 512 with 32 bounces — lookdev quality. Lower *Render Properties →

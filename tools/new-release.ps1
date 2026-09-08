@@ -195,7 +195,7 @@ if (-not $stampMatch.Success) {
             Write-Host "    stamp in the file : $($stampMatch.Groups[1].Value.Substring(0,16))" -ForegroundColor Red
             Write-Host "    stamp right now   : $($now.Substring(0,16))" -ForegroundColor Red
             Write-Host "    changed since     : $($moved -join ', ')" -ForegroundColor Red
-            Write-Host "  Regenerate it (run.ps1 step 2), then release." -ForegroundColor Red
+            Write-Host "  Regenerate it (run.ps1 step 4), then release." -ForegroundColor Red
             Write-Host ""
             throw "Stale $asset -- see above."
         }

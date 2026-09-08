@@ -137,8 +137,8 @@ MUTATIONS = [
         key="focus-unconditional",
         defect="6  focus_object set without comparing first",
         relative_path="tools/make_migration.py",
-        old="        'if data and target and data.dof.focus_object is not target:',",
-        new="        'if data and target:',",
+        old="        'elif data.dof.focus_object is not target:',",
+        new="        'else:',",
         tests=["test_runtime.ASecondRunChangesNothing"],
         symptom="the second run reports a change, so the one property that "
                 "catches blind assignment stops working",
@@ -204,6 +204,18 @@ MUTATIONS = [
         tests=["test_release_notes.AnEntryIsCutAtTheNextVersion"],
         symptom="a version's own sub-heading truncates the published page -- "
                 "v1.0.0 went out as two lines",
+    ),
+    Mutation(
+        key="silent-skip",
+        defect="14  a missing target skipped without a word",
+        relative_path="tools/make_migration.py",
+        old="""            'if data is None:',
+            '    ' + missing("camera data '%s'" % data_name, "nothing set"),
+            'else:',""",
+        new="""            'if data:',""",
+        tests=["test_runtime.AMissingTargetIsReportedNotSkipped"],
+        symptom="a camera data block that is not there is not configured and "
+                "nothing says so -- the run reports success",
     ),
 ]
 
