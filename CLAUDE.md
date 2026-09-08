@@ -109,6 +109,8 @@ Lookdev-Studio-Switcher\
 ├── tests\                      the suite: no Blender, standard library only
 │   ├── fakebpy.py              the fake bpy the generated code is executed against
 │   ├── mutations.py            puts every fixed defect back, checks the tests notice
+│   ├── test_addon.py           lookdev_switcher.py itself: registering twice,
+│   │                           teardown, what a re-run leaves behind
 │   └── test_*.py               one class per defect in docs\MAINTAINING.md
 ├── .github\workflows\tests.yml CI: the suite on every push, Ubuntu + Windows
 ├── _CLAUDE_\                   WORKFLOW (local steps), VibeCoding .docx — git-ignored
@@ -138,6 +140,18 @@ Licence: GPL-3.0-or-later (`bpy` add-ons are derivative works of Blender).
 Current release: `v1.3.3` (tag present, asset uploaded, CI green). It fixes a
 crash on Blender 5.2.1 that 1.3.2 and every release back to 1.3.0 had — see the
 1.3.3 entry in `CHANGELOG.md`. Tested on 5.2.1 on a fresh copy of `ALBIN_293`.
+`1.3.4` is in the tree, panel-only, waiting on a run in Blender.
+
+**The scene may not be redistributed, and that was checked, not assumed.**
+CGTrader's Royalty Free License, which is what albin's model carries: *"The
+resale or redistribution by the Buyer of any Product obtained from the Site is
+expressly prohibited unless it is an Incorporated Product"*, and *"Products may
+not be sold, given, or assigned to another person or entity in the form it is
+downloaded from the Site."* "Given" covers handing it on for free, and a
+`.blend` in a repository is the model in downloadable form. albin's own page
+adds: *"Reselling any parts, modified parts, baked geometry or texture, or any
+source files is not allowed."* So `*.gitignore`-ing `*.blend` is not caution,
+it is the licence. Checked 2026-09-08.
 
 ---
 
