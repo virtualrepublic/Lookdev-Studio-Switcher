@@ -3,8 +3,8 @@
 # ============================================================================
 #  LOOKDEV_STUDIO_ORIGINAL_520.blend  ->  LOOKDEV_STUDIO_MODIFIED_520.blend
 #
-#  TOOLCHAIN STAMP  cdec1ca4f6a21f758514c9fb411812c8b2e92c408a323e9323df92f2aa3f8e75
-#  make_migration c7f8215cd5d5  snap_original fb05702dddf1  snap_modified 279600a92686  switcher 3007b58f5e1c  workspace c1bd8304c174
+#  TOOLCHAIN STAMP  e2ab564011505604ecf50020b99d2d900f47850a9b6fe64d5b47946bc7704396
+#  make_migration c7f8215cd5d5  snap_original fb05702dddf1  snap_modified 279600a92686  switcher b5249210040c  workspace c1bd8304c174
 #
 #  SHA-256 over everything that went into this file. tools/new-release.ps1
 #  recomputes it and refuses to release when it disagrees -- which means this
@@ -162,7 +162,7 @@ def relink(tree, wanted):
 TOOL_NAME = 'lookdev_switcher.py'
 
 TOOL_SOURCE = r'''# ============================================================================
-#  LOOKDEV SWITCHER  v1.3.1
+#  LOOKDEV SWITCHER  v1.3.2
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -220,7 +220,7 @@ TOOL_SOURCE = r'''# ============================================================
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 3, 1),
+    "version": (1, 3, 2),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",

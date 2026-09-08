@@ -15,7 +15,7 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ---
 
-## [Unreleased]
+## [1.3.2] — 2026-09-08
 
 The conversion now **says so when something it meant to configure is not
 there.** Until now a camera, collection, modifier or compositor node the
