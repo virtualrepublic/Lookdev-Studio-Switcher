@@ -230,6 +230,18 @@ MUTATIONS = [
         symptom="Blender 5.2.1 dies in wm_event_do_notifiers after the script "
                 "finishes, with no Python on the stack",
     ),
+    Mutation(
+        key="timer-identity",
+        defect="16  a re-run of the text block added another background timer",
+        relative_path="lookdev_switcher.py",
+        old="""    if _is_superseded():
+        return None             # a newer run is in charge -- retire quietly""",
+        new="""    if False:
+        return None             # a newer run is in charge -- retire quietly""",
+        tests=["test_addon.TheAutoCollectTimerDoesNotPileUp"],
+        symptom="one more timer per run of the text block, each polling twice "
+                "a second, none of them reachable to stop",
+    ),
 ]
 
 

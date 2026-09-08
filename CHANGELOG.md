@@ -15,6 +15,61 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ---
 
+## [1.3.4] — 2026-09-08
+
+**The background watcher no longer piles up.** Running the tool's text block
+again in the same Blender session — which is what happens every time you press
+Run Script, and what the panel asks you to do after editing it — started a
+second copy of the import watcher, then a third, each checking the scene twice
+a second and none of them stoppable. Nothing visibly broke; it just kept adding
+work.
+
+Panel-only change: your scene is untouched, so **no reconversion is needed**.
+Swap the text block, or re-run the current `setup_lookdev_scene.py`.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases
+page.
+
+### Fixed
+- **A re-run of the add-on no longer leaves the previous run's timer behind.**
+  `register()` guarded the auto-collect timer with
+  `bpy.app.timers.is_registered(_auto_model_timer)`, and that compares by
+  **identity**. Blender executes a text block as a *fresh module*: new function
+  objects, `_is_registered` back to `False`. So the guard did not recognise the
+  earlier timer, registered a second one, and neither `register()` nor
+  `_teardown()` could ever reach the first — `bpy.app.timers` cannot be
+  enumerated, and `_teardown()` unregisters by identity too. Opening an
+  unrelated file did not clear them either: the `load_post` guard tears down
+  only the newest module. Ten runs meant ten timers, for the rest of the
+  session.
+
+  The fix leans on the one registry here that *can* be enumerated, and that
+  this file already deduped correctly: `register()` removes every `load_post`
+  handler named `_lookdev_load_post` before appending its own, so a module
+  whose handler is no longer in that list has been replaced. `_is_superseded()`
+  asks exactly that, and a superseded timer retires itself by returning `None`
+  on its next tick. The handler is now installed *before* the timer starts, so
+  the list already names who is in charge by the time anything ticks.
+
+  No new mechanism was invented for this: returning `None` to end a timer is
+  what the generated installer's own deferred steps already do, and the
+  handler dedup is the add-on's own. Nothing needed probing in Blender.
+
+### Added
+- **`tests/test_addon.py` — the add-on itself is under test now.** Everything
+  in `tests/` tested the generated installer; `lookdev_switcher.py` had none,
+  and its defects are lifecycle defects (what is left over on the second run)
+  which a fake reproduces exactly, since none of it is memory management. The
+  fake grew what that needs and no more: `bpy.app.handlers`, `bpy.utils`
+  register/unregister, `bpy.props`, a `bpy.types.Scene` to hang properties on,
+  a stub `mathutils`, and `Timers.tick()` — one round at a time, because a
+  timer that reschedules itself for ever never lets `fire()` finish.
+  Mutation `timer-identity` puts the identity check back; three tests catch it.
+
+---
+
 ## [1.3.3] — 2026-09-08
 
 **Fixes a crash on Blender 5.2.1.** Running the installer on a freshly

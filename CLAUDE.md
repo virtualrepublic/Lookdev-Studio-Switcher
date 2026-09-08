@@ -314,9 +314,9 @@ against a fake `bpy`**, not by reading — every bug in the table in
 `docs/MAINTAINING.md`. That fake is `tests/fakebpy.py`; the suite runs without
 Blender and without a single dependency:
 
-    python -m unittest discover -s tests -v     # 106 tests, about 15 s
+    python -m unittest discover -s tests -v     # 119 tests, about 18 s
     python tests/mutations.py                   # every fixed defect put back;
-                                                # each must be caught (15 of 15)
+                                                # each must be caught (17 of 17)
 
 CI (`.github/workflows/tests.yml`) runs the suite on every push, Ubuntu and
 Windows. A generator change gets a test that fails without it — show the red

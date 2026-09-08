@@ -430,12 +430,29 @@ earned its keep repeatedly; keep using it.
 | `image.view_all(fit_view=True)` | zoomed a 256×256 placeholder to fill the editor | set `space.image` to the Viewer node instead |
 | Release notes cut at any `## ` | a version's own sub-heading truncated the published page | stop only at `## [x.y.z]` or end of file |
 | Renames emitted after the phases that use the new names | a **renamed** camera data block kept its original lens, sensor and DOF values on the first run — `get()` found nothing, `if data:` skipped the block, nothing was logged, and the run reported success. Two of three focus objects never set. The second run applied them, so "second run reports 0 changes" could not hold either. | `renames` moved ahead of `camera_data` in `Emitter.PHASES` |
+| A re-run of the add-on added another background timer | `bpy.app.timers.is_registered()` compares by identity, and a re-run of the text block is a fresh module with a new function object. Every run added a timer polling twice a second; none could be reached afterwards, because `bpy.app.timers` cannot be enumerated | `_is_superseded()` — a module whose `load_post` handler has been replaced retires its own timer by returning `None` |
 | The workspace switch made inside the script run | Blender 5.2.1 died in `wm_event_do_notifiers` **after** the run, with an empty Python backtrace. `window.workspace = …` only queues a notifier; applied after the operator's undo push, it dereferenced freed memory. Saving and reopening the file first made it go away, which is what made it look like a file problem | `_ws_switch()`, called from the timer chain and addressing the workspace by **name** |
 | A missing target skipped without a word | the silence behind the row above: every configuring step fell through an `if data:` when its lookup failed, so a step that did nothing looked like a step that had nothing to do — through every test conversion | `missing()` emits `!! … not found -- …` through `log()`, so it counts, and repeats on a second run |
 
 The last one was found on 2026-08-15 by the test suite in `tests/`, not by a
 release run — it had been shipping for as long as the renames had existed.
 Fixed, regenerated and released as 1.3.1 the same day.
+
+### The add-on has its own tests
+
+`tests/test_addon.py` executes `lookdev_switcher.py` against the fake, once per
+simulated *Run Script*. What it is for is lifecycle: registering twice in one
+session, tearing down, what is left over. None of that is memory management, so
+unlike the three crashes it reproduces exactly.
+
+Two API facts it pins, both learned the hard way:
+
+- **`bpy.app.timers` cannot be enumerated.** There is `register`, `unregister`
+  and `is_registered`, all by identity. A timer whose only reference lived in a
+  module nobody holds any more is unreachable for the rest of the session.
+- **`bpy.app.handlers.load_post` can.** It is a plain list, so it can be deduped
+  by `__name__` across modules — which is how the file-load guard already
+  worked, and now also how a superseded timer finds out it has been replaced.
 
 ### Running the tests
 

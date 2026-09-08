@@ -772,6 +772,35 @@ class Timers:
     def is_registered(self, function):
         return any(f is function for f, _i in self.registered)
 
+    def unregister(self, function):
+        """By identity, and it raises when the function is not registered.
+
+        Both are Blender's behaviour and both matter: identity is why a timer
+        from an earlier run of the script cannot be reached at all, and the
+        raise is what _teardown() guards against with is_registered().
+        """
+        for entry in list(self.registered):
+            if entry[0] is function:
+                self.registered.remove(entry)
+                return
+        raise ValueError("timer is not registered")
+
+    def tick(self):
+        """One round: run every registered timer exactly once.
+
+        fire() runs the queue to exhaustion, which a timer that reschedules
+        itself for ever -- the add-on's poll -- would never let finish. This
+        drives such a timer a round at a time. A callback returning None is
+        dropped, which is how Blender retires one.
+        """
+        queue = list(self.registered)
+        self.registered = []
+        for function, _interval in queue:
+            result = function()
+            if result is not None:
+                self.registered.append((function, result))
+        return len(self.registered)
+
     def fire(self, rounds=200):
         """Run every registered timer to completion. Returns how many ran."""
         ran = 0
@@ -793,18 +822,97 @@ class Timers:
         return ran
 
 
+class Handlers:
+    """bpy.app.handlers -- load_post and the persistent decorator.
+
+    The list itself is the point. It is the one registry in this API that can
+    be ENUMERATED, which is why the add-on uses it twice: to guard file loads,
+    and to let a timer from a superseded run find out that it has been
+    replaced. bpy.app.timers offers no such listing.
+    """
+
+    def __init__(self):
+        self.load_post = []
+
+    @staticmethod
+    def persistent(function):
+        return function
+
+
 class App:
     def __init__(self):
         self.timers = Timers()
+        self.handlers = Handlers()
         self.version = (5, 2, 0)
 
 
 class Utils:
     def __init__(self):
         self.resources = {}
+        self.types = None          # wired up by make()
 
     def system_resource(self, kind, path=""):
         return self.resources.get((kind, path))
+
+    def register_class(self, cls):
+        """Blender puts the class on bpy.types under its own name.
+
+        Modelled because the add-on depends on it: registration is per Blender
+        SESSION, not per module, so a second run of the script finds the first
+        run's class through bpy.types and unregisters it before installing its
+        own. Without that the two would collide.
+        """
+        setattr(self.types, cls.__name__, cls)
+
+    def unregister_class(self, cls):
+        if getattr(self.types, cls.__name__, None) is cls:
+            delattr(self.types, cls.__name__)
+
+
+class Property:
+    """What a bpy.props.*Property() call returns.
+
+    The add-on only assigns these to bpy.types.Scene and lets Blender turn
+    them into attributes on every scene. Nothing here reads one back through a
+    scene, so what the object IS does not matter -- only that the call works.
+    """
+
+    def __init__(self, kind, options):
+        self.kind = kind
+        self.default = options.get("default")
+
+    def __repr__(self):
+        return "<%s>" % self.kind
+
+
+class Props:
+    """bpy.props. Any *Property name is accepted; nothing else is."""
+
+    def __getattr__(self, name):
+        if not name.endswith("Property"):
+            raise AttributeError(name)
+        return lambda **options: Property(name, options)
+
+
+class SceneType:
+    """Stands in for bpy.types.Scene.
+
+    The add-on hangs its panel properties on it with setattr and takes them
+    off again with delattr, so it has to be a real class -- and one per fake,
+    or two tests would see each other's registrations.
+    """
+
+
+class Vector(tuple):
+    """Enough of mathutils.Vector to let the add-on import.
+
+    The geometry it is used in -- bounding boxes, camera fitting -- is not
+    reached by these tests. Add the arithmetic here when something needs it,
+    rather than pretending this is a vector type.
+    """
+
+    def __new__(cls, values=()):
+        return tuple.__new__(cls, values)
 
 
 def make(scene=None, window=None):
@@ -818,8 +926,10 @@ def make(scene=None, window=None):
     module.data.scenes.add(scene)
     module.context = Context(scene=scene, window=window)
     module.types = types.SimpleNamespace(Operator=object, Panel=object,
-                                         AddonPreferences=object)
-    module.props = types.SimpleNamespace()
+                                         AddonPreferences=object,
+                                         Scene=type("Scene", (SceneType,), {}))
+    module.props = Props()
+    module.utils.types = module.types
     return module
 
 
@@ -831,12 +941,21 @@ class installed:
 
     def __enter__(self):
         self.previous = sys.modules.get("bpy")
+        self.previous_mathutils = sys.modules.get("mathutils")
         sys.modules["bpy"] = self.module
+        # The add-on imports mathutils at module level; the generated
+        # installer does not. Installing it here costs the installer tests
+        # nothing and is what lets the add-on be imported at all.
+        mathutils = types.ModuleType("mathutils")
+        mathutils.Vector = Vector
+        sys.modules["mathutils"] = mathutils
         return self.module
 
     def __exit__(self, *exc):
-        if self.previous is None:
-            sys.modules.pop("bpy", None)
-        else:
-            sys.modules["bpy"] = self.previous
+        for name, previous in (("bpy", self.previous),
+                               ("mathutils", self.previous_mathutils)):
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
         return False

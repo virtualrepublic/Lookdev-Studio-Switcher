@@ -3,8 +3,8 @@
 # ============================================================================
 #  LOOKDEV_STUDIO_ORIGINAL_520.blend  ->  LOOKDEV_STUDIO_MODIFIED_520.blend
 #
-#  TOOLCHAIN STAMP  3ad9b5bc5fc72e0412ca892c4294c8abff5bfe6a9428b42cf431765f499c0313
-#  make_migration a4085a2cd989  snap_original fb05702dddf1  snap_modified 279600a92686  switcher e7c82fd27a40  workspace c1bd8304c174
+#  TOOLCHAIN STAMP  b8c496af2283f0b215b51a0d25876b42ad5788641dbe8df8b072c96b74bbfbe9
+#  make_migration a4085a2cd989  snap_original fb05702dddf1  snap_modified 279600a92686  switcher 4142e178151d  workspace c1bd8304c174
 #
 #  SHA-256 over everything that went into this file. tools/new-release.ps1
 #  recomputes it and refuses to release when it disagrees -- which means this
@@ -162,7 +162,7 @@ def relink(tree, wanted):
 TOOL_NAME = 'lookdev_switcher.py'
 
 TOOL_SOURCE = r'''# ============================================================================
-#  LOOKDEV SWITCHER  v1.3.3
+#  LOOKDEV SWITCHER  v1.3.4
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -220,7 +220,7 @@ TOOL_SOURCE = r'''# ============================================================
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 3, 3),
+    "version": (1, 3, 4),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -406,6 +406,28 @@ def auto_collect_into_model():
     return moved
 
 
+def _is_superseded():
+    """True when a newer run of this script has replaced this module.
+
+    Running the text block again hands Blender a FRESH module: new function
+    objects, `_is_registered` back to False. So `register()` cannot reach the
+    previous run's state, and `bpy.app.timers.is_registered()` compares by
+    IDENTITY -- it does not recognise the earlier timer and registers a second
+    one. Every re-run added another, each polling twice a second, and none of
+    them reachable to stop: bpy.app.timers cannot be enumerated, so there is no
+    way to find a function whose only reference lives in a module nobody holds
+    any more. Opening an unrelated file did not help either -- `_teardown()`
+    unregisters by identity too, so it only ever reached the newest one.
+
+    A stale timer therefore has to notice by itself. `register()` removes every
+    load_post handler named like ours before appending its own, so a module
+    whose handler is no longer in that list is a module that has been replaced.
+    That list is the one thing here that IS enumerable, and it is already the
+    mechanism the file-load guard depends on.
+    """
+    return _lookdev_load_post not in bpy.app.handlers.load_post
+
+
 def _auto_model_timer():
     """Timer callback: collect new objects when the panel toggle is on.
 
@@ -414,6 +436,8 @@ def _auto_model_timer():
     affects things imported from that point on, not everything already there.
     """
     global _seen_object_names, _seen_collection_names
+    if _is_superseded():
+        return None             # a newer run is in charge -- retire quietly
     scene = getattr(bpy.context, "scene", None)
     on = bool(getattr(scene, "lookdev_auto_model", False)) if scene else False
     if on and getattr(bpy.context, "mode", 'OBJECT') == 'OBJECT':
@@ -1026,19 +1050,24 @@ def register():
         default=True,
     )
 
+    # Guard file loads so the panel does not follow the scene into File > New or an
+    # unrelated file. Dedup by name: a reopened file re-runs this as a fresh module
+    # with a new function object, so match on __name__, not identity.
+    #
+    # Installed BEFORE the timer below, not after: this list is what a timer
+    # from an earlier run reads to find out that it has been replaced (see
+    # _is_superseded), so it must already say who is in charge by the time any
+    # timer ticks.
+    for h in list(bpy.app.handlers.load_post):
+        if getattr(h, "__name__", "") == "_lookdev_load_post":
+            bpy.app.handlers.load_post.remove(h)
+    bpy.app.handlers.load_post.append(_lookdev_load_post)
+
     # Start watching for new objects and collections (imports) to pull into MODEL.
     _seen_object_names = _current_object_names()
     _seen_collection_names = _current_collection_names()
     if not bpy.app.timers.is_registered(_auto_model_timer):
         bpy.app.timers.register(_auto_model_timer, first_interval=AUTO_MODEL_POLL)
-
-    # Guard file loads so the panel does not follow the scene into File > New or an
-    # unrelated file. Dedup by name: a reopened file re-runs this as a fresh module
-    # with a new function object, so match on __name__, not identity.
-    for h in list(bpy.app.handlers.load_post):
-        if getattr(h, "__name__", "") == "_lookdev_load_post":
-            bpy.app.handlers.load_post.remove(h)
-    bpy.app.handlers.load_post.append(_lookdev_load_post)
     _is_registered = True
 
     apply_color_tags()      # set outliner colors once on load
