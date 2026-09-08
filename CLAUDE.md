@@ -137,10 +137,10 @@ instructions. `*.blend` is git-ignored so the scene cannot leak in.
 
 Author: Prof. Michael Klein <professor@virtualrepublic.org>.
 Licence: GPL-3.0-or-later (`bpy` add-ons are derivative works of Blender).
-Current release: `v1.3.3` (tag present, asset uploaded, CI green). It fixes a
-crash on Blender 5.2.1 that 1.3.2 and every release back to 1.3.0 had — see the
-1.3.3 entry in `CHANGELOG.md`. Tested on 5.2.1 on a fresh copy of `ALBIN_293`.
-`1.3.4` is in the tree, panel-only, waiting on a run in Blender.
+Current release: `v1.3.4` (tag present, asset uploaded, CI green). Panel-only:
+a re-run of the text block no longer leaves the previous run's background timer
+polling. `v1.3.3` before it fixed a crash on Blender 5.2.1 that every release
+back to 1.3.0 had — see both entries in `CHANGELOG.md`.
 
 **The scene may not be redistributed, and that was checked, not assumed.**
 CGTrader's Royalty Free License, which is what albin's model carries: *"The
