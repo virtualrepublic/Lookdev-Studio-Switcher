@@ -3,8 +3,8 @@
 # ============================================================================
 #  LOOKDEV_STUDIO_ORIGINAL_520.blend  ->  LOOKDEV_STUDIO_MODIFIED_520.blend
 #
-#  TOOLCHAIN STAMP  e2ab564011505604ecf50020b99d2d900f47850a9b6fe64d5b47946bc7704396
-#  make_migration c7f8215cd5d5  snap_original fb05702dddf1  snap_modified 279600a92686  switcher b5249210040c  workspace c1bd8304c174
+#  TOOLCHAIN STAMP  3ad9b5bc5fc72e0412ca892c4294c8abff5bfe6a9428b42cf431765f499c0313
+#  make_migration a4085a2cd989  snap_original fb05702dddf1  snap_modified 279600a92686  switcher e7c82fd27a40  workspace c1bd8304c174
 #
 #  SHA-256 over everything that went into this file. tools/new-release.ps1
 #  recomputes it and refuses to release when it disagrees -- which means this
@@ -162,7 +162,7 @@ def relink(tree, wanted):
 TOOL_NAME = 'lookdev_switcher.py'
 
 TOOL_SOURCE = r'''# ============================================================================
-#  LOOKDEV SWITCHER  v1.3.2
+#  LOOKDEV SWITCHER  v1.3.3
 # ============================================================================
 #  by Prof. Michael Klein
 #     professor@virtualrepublic.org
@@ -220,7 +220,7 @@ TOOL_SOURCE = r'''# ============================================================
 bl_info = {
     "name": "Lookdev Switcher",
     "author": "Prof. Michael Klein <professor@virtualrepublic.org>",
-    "version": (1, 3, 2),
+    "version": (1, 3, 3),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar (N-Panel) > Lookdev",
     "description": "Collection/camera switcher and turntable setup for lookdev",
@@ -2978,18 +2978,16 @@ def _install_workspace():
     # poll fails; an operator that does nothing returns {'CANCELLED'} quietly.
     # An earlier version treated "no exception" as success and reported ten
     # removals that never happened.
-    # Move off the old tabs BEFORE deleting: Blender will not drop a workspace a
-    # window is showing. The assignment only takes effect on the next UI pass,
-    # which is why the tab that happens to be open survives the first pass and
-    # is retried from a timer below.
+    # Which tab to end up on. NOT switched to here -- see _ws_switch(): a
+    # switch queued while this script is still running is applied after the
+    # operator has finished, and on 5.2.1 that killed Blender. The NAME is
+    # carried on, not the datablock: the wait is where pointers die.
     window = getattr(bpy.context, "window", None)
-    if window is not None and loaded:
-        target = bpy.data.workspaces.get("Layout") or loaded[0]
-        try:
-            window.workspace = target
-            _ws_log("  active tab set to '%s'" % target.name)
-        except Exception as exc:
-            _ws_log("  could not switch to '%s': %s" % (target.name, exc))
+    target = bpy.data.workspaces.get("Layout") or (loaded[0] if loaded else None)
+    target_name = target.name if target is not None else None
+    if target_name:
+        _ws_log("  active tab will be '%s' once the script has finished"
+                % target_name)
 
     # NOTHING is deleted here. This code runs inside bpy.ops.text.run_script(),
     # and deleting a workspace frees its screens and areas -- including, quite
@@ -3003,11 +3001,49 @@ def _install_workspace():
     # Appending and renaming are data-level and safe. Deleting is not, so it
     # waits for the timer below, which runs after the operator has finished.
     if doomed:
-        _ws_retry([old.name for old in doomed], window)
+        _ws_retry([old.name for old in doomed], window, target_name)
     else:
         _ws_log("  nothing to remove")
-        _ws_collapse_outliners(window)
+        _ws_collapse_outliners(window, target_name)
     return
+
+
+def _ws_switch(window, name):
+    """Show the workspace called `name`. Only ever from a timer, never inline.
+
+    Assigning window.workspace does not take effect at once: it queues a
+    notifier Blender applies on its next UI pass. Queued from INSIDE
+    bpy.ops.text.run_script(), that pass comes after the operator has finished
+    and pushed its undo step -- and on Blender 5.2.1 what the notifier then
+    dereferences is gone:
+
+        EXCEPTION_ACCESS_VIOLATION (0xc0000005), reading 0x1F0
+        blender::ED_workspace_change
+        blender::WM_window_set_active_workspace
+        blender::wm_event_do_notifiers
+        blender::WM_main
+
+    The Python backtrace in that crash report is EMPTY -- no script, no timer
+    callback, nothing of ours was running any more. The only thing this script
+    had left in the world by then was that queued switch. Third crash of the
+    same family, after the workspace deletion and the colour space, and the
+    same cure: wait until the operator has finished. Addressed by NAME,
+    because a datablock held across that wait is exactly what does not survive
+    it.
+    """
+    if window is None or not name:
+        return None
+    workspace = bpy.data.workspaces.get(name)
+    if workspace is None:
+        _ws_log("      '%s' is gone -- cannot show it" % name)
+        return None
+    try:
+        window.workspace = workspace
+        return workspace
+    except Exception as exc:
+        _ws_log("      could not show '%s': %s" % (name, exc))
+        return None
+
 
 def _ws_collapse_all_levels(area):
     """One level per call; a lookdev scene is nowhere near this deep."""
@@ -3125,7 +3161,7 @@ _WS_TIDY = {
 }
 
 
-def _ws_collapse_outliners(window):
+def _ws_collapse_outliners(window, target_name=None):
     """Tidy every installed workspace: collapse outliners, frame node trees.
 
     NOT a copy of the source file's state -- that cannot be read or written.
@@ -3146,7 +3182,12 @@ def _ws_collapse_outliners(window):
         _ws_set_finished(True)
         return
 
-    started_on = getattr(window, "workspace", None)
+    # This walk switches tabs, so nothing that reallocates data-blocks may run
+    # alongside it. _ws_retry() already says so before queueing; saying it here
+    # as well covers the path with nothing to remove, which arrives directly.
+    _ws_set_finished(False)
+    end_on = target_name or getattr(getattr(window, "workspace", None),
+                                    "name", None)
     names = [ws.name for ws in bpy.data.workspaces
              if ws.get("lookdev_ui") == WORKSPACE_STAMP]
     state = {"i": 0, "switched": False, "done": 0}
@@ -3154,11 +3195,7 @@ def _ws_collapse_outliners(window):
     def step():
         if state["i"] >= len(names):
             if not state.get("returned"):
-                if started_on is not None:
-                    try:
-                        window.workspace = started_on
-                    except Exception:
-                        pass
+                _ws_switch(window, end_on)
                 state["returned"] = True
                 return 0.2          # let the switch land before the last step
 
@@ -3243,7 +3280,7 @@ def _ws_set_finished(value):
         pass
 
 
-def _ws_retry(names, window):
+def _ws_retry(names, window, target_name=None):
     """Delete the replaced workspaces, from a timer -- never inline.
 
     Two reasons this cannot happen while the script is running:
@@ -3256,10 +3293,22 @@ def _ws_retry(names, window):
       away from it is applied on the next UI pass -- which has not happened
       while the script is still running.
 
-    By the time this timer fires the operator has finished and the switch has
-    landed, so neither problem applies.
+    By the time this timer fires the operator has finished, so neither problem
+    applies -- and the switch away from the doomed tabs happens here too, on
+    the first tick, for the reason in _ws_switch().
     """
+    state = {"moved": False}
+
     def again():
+        # First tick: move off the tabs that are about to go. Blender will not
+        # delete a workspace a window is showing, and the switch is only safe
+        # now that the script's own operator has finished.
+        if not state["moved"]:
+            state["moved"] = True
+            if _ws_switch(window, target_name) is not None:
+                _ws_log("      active tab set to '%s'" % target_name)
+                return 0.2          # let the switch land before deleting
+
         left = []
         for name in names:
             old = bpy.data.workspaces.get(name)
@@ -3279,7 +3328,7 @@ def _ws_retry(names, window):
             _ws_log("  They are marked [replaced] -- right-click the tab > Delete.")
         else:
             _ws_log("  all old workspaces removed")
-        _ws_collapse_outliners(window)
+        _ws_collapse_outliners(window, target_name)
         return None            # one shot
 
     try:

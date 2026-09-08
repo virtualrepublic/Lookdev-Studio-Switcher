@@ -530,9 +530,32 @@ class WorkSpace(ID):
 
 
 class Window:
+    """A window, recording WHEN its workspace was assigned.
+
+    The result of a switch is not the interesting part -- the moment is.
+    Assigning window.workspace queues a notifier Blender applies on its next
+    UI pass, so a switch made while the script is still running is applied
+    after bpy.ops.text.run_script() has finished, against data-blocks the undo
+    push has meanwhile moved. That is the 5.2.1 crash. A test can only see it
+    if the fake remembers each assignment, so `switches` does.
+
+    The value handed to __init__ is the tab the window starts on and is not a
+    switch.
+    """
+
     def __init__(self, workspace=None, screen=None):
-        self.workspace = workspace
+        self.switches = []
+        self._workspace = workspace
         self.screen = screen
+
+    @property
+    def workspace(self):
+        return self._workspace
+
+    @workspace.setter
+    def workspace(self, value):
+        self._workspace = value
+        self.switches.append(getattr(value, "name", value))
 
 
 class Image(ID):

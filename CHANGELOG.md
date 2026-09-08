@@ -15,6 +15,77 @@ Every released version is tagged in git (`vX.Y.Z`) and archived as a ZIP in
 
 ---
 
+## [1.3.3] — 2026-09-08
+
+**Fixes a crash on Blender 5.2.1.** Running the installer on a freshly
+downloaded scene could kill Blender the moment the script finished — after
+everything had been applied, so the conversion itself was fine and only the
+work was lost. Saving the file and reopening it before running made it go
+away, which is what made it look like a problem with the download.
+
+If 1.3.2 worked for you, nothing here changes your scene: same conversion,
+same panel, same values. If it crashed, this is the fix — download the script
+again and convert a fresh copy.
+
+<!-- release-notes-end -->
+
+Everything below is the maintainer's record and does not go to the Releases
+page.
+
+### Fixed
+- **The active workspace is no longer switched from inside the script run.**
+  Third crash of the family that already cost the workspace deletion and the
+  colour space their place in `migrate()`, and it hid in the one line that
+  does not look like an operator at all:
+
+      window.workspace = target
+
+  That assignment switches nothing on the spot. It queues a notifier Blender
+  applies on its next UI pass — which, for a script running inside
+  `bpy.ops.text.run_script()`, is after the operator has finished and pushed
+  its undo step. On 5.2.1 the workspace it then dereferenced was gone:
+
+      EXCEPTION_ACCESS_VIOLATION (0xc0000005), reading 0x1F0
+      blender::ED_workspace_change
+      blender::WM_window_set_active_workspace
+      blender::wm_event_do_notifiers
+      blender::WM_main
+      # Python backtrace        <- empty
+
+  The empty Python backtrace is the whole diagnosis: no script, no timer
+  callback, nothing of ours was running. `lookdev_workspace.log.txt` stops at
+  *"will be removed once the script has finished"*, so the deletion timer had
+  not fired either. The queued switch was the only thing this script still had
+  in the world.
+
+  `_ws_switch()` now makes the switch from the timer chain — first tick of
+  `_ws_retry()`, before the deletion, so the "leave a tab before deleting it"
+  ordering the assignment existed for is kept — and addresses the workspace by
+  **name**, since a datablock held across that wait is precisely what does not
+  survive it. Why 5.2.0 tolerated it and 5.2.1 does not was not chased: the
+  rule was already written down for two other steps, this one simply had not
+  been recognised as the same kind.
+
+  Test: `tests/test_deferred.TheTabIsSwitchedFromATimerNotInline` (6 tests);
+  mutation `switch-inline` puts the inline assignment back and is caught. The
+  fake `Window` records *when* its workspace was assigned — without that the
+  moment, which is the entire defect, is invisible to a test.
+- **The tidy walk now blocks the deferred colour conversion on every path.**
+  `_WS_FINISHED` was cleared by `_ws_retry()` only, so a file whose workspaces
+  are all named differently — nothing to replace, nothing to delete — reached
+  the tidy walk with the flag still set, and the colour conversion, which
+  rewrites every data-block in the file, could fire while the walk was still
+  switching tabs. Same family, never observed, closed on the way past.
+
+### Note
+Blender 5.2.1 sits in the Launcher's `daily\` folder, which `tools\run.ps1`
+does not search — it looks in `stable\`, `custom\` and Program Files. The
+toolchain therefore still runs on 5.2.0 while testing happens on 5.2.1. Left
+as it is on purpose: which Blender writes the snapshots is a calibration
+decision, not a convenience.
+
+---
+
 ## [1.3.2] — 2026-09-08
 
 The conversion now **says so when something it meant to configure is not

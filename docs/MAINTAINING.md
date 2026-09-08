@@ -185,6 +185,13 @@ Measured limits — do not spend time re-investigating these:
   `Layout` onto a file that already has one would otherwise leave the user with
   `Layout` and `Layout.001`. Workspaces the user has and the export does not are
   left alone.
+- **Never switch the active workspace from inside the running script either.**
+  `window.workspace = ws` does not switch anything on the spot: it queues a
+  notifier that Blender applies on its next UI pass, which for a script run
+  inside `bpy.ops.text.run_script()` is *after* the operator has finished and
+  pushed its undo step. On 5.2.1 the workspace that notifier then dereferenced
+  was gone — `ED_workspace_change`, empty Python backtrace. The switch waits
+  for the timer chain now, like the deletion, and is addressed by name.
 - **Never delete a workspace from inside the running script.** Deleting one
   frees its screens and areas; the script runs inside `bpy.ops.text.run_script()`,
   and when that operator finishes Blender builds its redo panel for the area it
@@ -423,6 +430,7 @@ earned its keep repeatedly; keep using it.
 | `image.view_all(fit_view=True)` | zoomed a 256×256 placeholder to fill the editor | set `space.image` to the Viewer node instead |
 | Release notes cut at any `## ` | a version's own sub-heading truncated the published page | stop only at `## [x.y.z]` or end of file |
 | Renames emitted after the phases that use the new names | a **renamed** camera data block kept its original lens, sensor and DOF values on the first run — `get()` found nothing, `if data:` skipped the block, nothing was logged, and the run reported success. Two of three focus objects never set. The second run applied them, so "second run reports 0 changes" could not hold either. | `renames` moved ahead of `camera_data` in `Emitter.PHASES` |
+| The workspace switch made inside the script run | Blender 5.2.1 died in `wm_event_do_notifiers` **after** the run, with an empty Python backtrace. `window.workspace = …` only queues a notifier; applied after the operator's undo push, it dereferenced freed memory. Saving and reopening the file first made it go away, which is what made it look like a file problem | `_ws_switch()`, called from the timer chain and addressing the workspace by **name** |
 | A missing target skipped without a word | the silence behind the row above: every configuring step fell through an `if data:` when its lookup failed, so a step that did nothing looked like a step that had nothing to do — through every test conversion | `missing()` emits `!! … not found -- …` through `log()`, so it counts, and repeats on a second run |
 
 The last one was found on 2026-08-15 by the test suite in `tests/`, not by a

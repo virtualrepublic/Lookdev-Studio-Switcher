@@ -217,6 +217,19 @@ MUTATIONS = [
         symptom="a camera data block that is not there is not configured and "
                 "nothing says so -- the run reports success",
     ),
+    Mutation(
+        key="switch-inline",
+        defect="15  the workspace switch made inside the script run",
+        relative_path="tools/make_migration.py",
+        old="""    if target_name:
+        _ws_log("  active tab will be '%%s' once the script has finished"
+                %% target_name)""",
+        new="""    if target_name:
+        window.workspace = bpy.data.workspaces.get(target_name)""",
+        tests=["test_deferred.TheTabIsSwitchedFromATimerNotInline"],
+        symptom="Blender 5.2.1 dies in wm_event_do_notifiers after the script "
+                "finishes, with no Python on the stack",
+    ),
 ]
 
 

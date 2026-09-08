@@ -336,6 +336,126 @@ class WorkspacesAreDeletedFromATimer(unittest.TestCase):
         self.assertIsNotNone(bpy.data.workspaces.get("Layout [replaced]"))
 
 
+class TheTabIsSwitchedFromATimerNotInline(unittest.TestCase):
+    """Defect 15: the workspace switch was still being made inside the run.
+
+    Reported 2026-09-08: opening albin's download in Blender 5.2.1 and running
+    the installer killed Blender. Save the same scene once, reopen it, run the
+    installer -- fine. The crash report says why:
+
+        EXCEPTION_ACCESS_VIOLATION (0xc0000005), reading 0x1F0
+        blender::ED_workspace_change
+        blender::WM_window_set_active_workspace
+        blender::wm_event_do_notifiers
+        blender::WM_main
+        # Python backtrace        <- EMPTY
+
+    No Python was running. The workspace log stops at "will be removed once
+    the script has finished", so the deletion timer had not fired either.
+    Nothing of this script was left in the world except one thing: the
+    `window.workspace = target` assigned inline by _install_workspace(), which
+    Blender applies on its next UI pass -- after the operator has finished and
+    pushed its undo step.
+
+    Deleting workspaces and converting the colour space had already been moved
+    out of the run for the same reason; the switch was overlooked because it
+    only looks like an assignment. It is now made from the timer, and by name.
+
+    This test cannot reproduce the access violation -- the fake has no memory
+    management. What it pins is the rule the crash produced: no switch during
+    the synchronous run.
+
+    Mutation: switch-inline
+    """
+
+    def setUp(self):
+        self.workdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workdir.cleanup)
+        previous = tempfile.tempdir
+        tempfile.tempdir = self.workdir.name
+        self.addCleanup(setattr, tempfile, "tempdir", previous)
+
+    def a_run(self, existing=("Layout",), in_file=("Layout", "Shading"),
+              changes=()):
+        payload = os.path.join(self.workdir.name, "workspace_ui.blend")
+        with open(payload, "wb") as handle:
+            handle.write(b"not a real .blend -- the fake never parses it")
+        with quiet():
+            stamp, data = mm.read_workspace(payload)
+
+        bpy = fakebpy.make()
+        bpy.data.filepath = os.path.join(self.workdir.name, "fixture.blend")
+        for name in existing:
+            bpy.data.workspaces.add(fakebpy.WorkSpace(name))
+        bpy.data.libraries.workspaces_in_file = list(in_file)
+        window = fakebpy.Window(workspace=bpy.data.workspaces.get(existing[0]),
+                                screen=fakebpy.Screen("main"))
+        bpy.context.window = window
+        source = generate(list(changes), workspace_stamp=stamp,
+                          workspace_data=data)
+        module, _changes = run_generated(source, bpy)
+        return bpy, module, window
+
+    def test_no_switch_while_the_script_runs(self):
+        _bpy, _module, window = self.a_run()
+        self.assertEqual(window.switches, [],
+                         "a workspace switch was queued inside the run -- that "
+                         "notifier is applied after the operator finishes")
+
+    def test_the_run_says_the_switch_is_deferred(self):
+        _bpy, module, _window = self.a_run()
+        self.assertIn("active tab will be 'Layout' once the script has finished",
+                      "\n".join(module._ws_lines))
+
+    def test_the_switch_happens_once_the_timers_run(self):
+        bpy, _module, window = self.a_run()
+        with quiet():
+            bpy.app.timers.fire()
+        self.assertTrue(window.switches, "the tab was never switched at all")
+        self.assertEqual(window.workspace, bpy.data.workspaces.get("Layout"))
+
+    def test_the_old_tab_is_left_before_it_is_deleted(self):
+        # The reason the switch existed in the first place: Blender will not
+        # drop a workspace a window is showing. Moving it into the timer must
+        # not lose that ordering.
+        bpy, module, window = self.a_run()
+        with quiet():
+            bpy.app.timers.fire()
+        log = "\n".join(module._ws_lines)
+        switched = log.index("active tab set to 'Layout'")
+        removed = log.index("removed 'Layout [replaced]'")
+        self.assertLess(switched, removed,
+                        "the doomed tab was deleted before the window left it")
+
+    def test_the_switch_addresses_the_workspace_by_name(self):
+        """A datablock held across the wait is what does not survive it.
+
+        Renaming the target between the run and the timer stands in for the
+        pointer going stale: addressed by name, the code notices and says so
+        instead of using a reference it captured earlier.
+        """
+        bpy, module, window = self.a_run()
+        bpy.data.workspaces.get("Layout").name = "Renamed"
+        with quiet():
+            bpy.app.timers.fire()
+        self.assertIn("'Layout' is gone -- cannot show it",
+                      "\n".join(module._ws_lines))
+
+    def test_nothing_reallocating_may_run_during_the_tidy(self):
+        # _WS_FINISHED gates the deferred colour conversion. The path with
+        # nothing to remove reaches the tidy walk directly, and used to leave
+        # the flag True -- so the conversion could fire mid-walk.
+        # WORKING_SPACE_CHANGE so the flag exists at all: the generator emits
+        # _WS_FINISHED only when the migration also converts the colour space.
+        bpy, module, _window = self.a_run(existing=("Mine",),
+                                          in_file=("Layout",),
+                                          changes=WORKING_SPACE_CHANGE)
+        self.assertIn("nothing to remove", "\n".join(module._ws_lines))
+        self.assertFalse(module._WS_FINISHED[0],
+                         "the interface reported itself finished while the "
+                         "tidy walk was still to come")
+
+
 class TheImageEditorIsPointedNotZoomed(unittest.TestCase):
     """Defect 11, as far as it can be reached.
 

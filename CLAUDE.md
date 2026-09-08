@@ -135,7 +135,9 @@ instructions. `*.blend` is git-ignored so the scene cannot leak in.
 
 Author: Prof. Michael Klein <professor@virtualrepublic.org>.
 Licence: GPL-3.0-or-later (`bpy` add-ons are derivative works of Blender).
-Current release: `v1.3.1` (tag present, asset uploaded, CI green).
+Current release: `v1.3.2` (tag present, asset uploaded, CI green). **It crashes
+Blender 5.2.1** — see the 1.3.3 entry in `CHANGELOG.md`; the fix is in the tree,
+waiting on a test in 5.2.1 before it is published.
 
 ---
 
@@ -259,6 +261,12 @@ behind it and travels with a clone; this list does not repeat it.
   be reachable while something is absent. The old `if data:` silence is what hid
   the 1.3.1 phase-order bug through every test conversion. Do not reintroduce
   it; the `silent-skip` mutation checks.
+- **Never switch the active workspace from inside the running script.**
+  `window.workspace = ws` queues a notifier applied on the next UI pass — after
+  `bpy.ops.text.run_script()` has finished and pushed its undo step. On 5.2.1
+  that crashed in `ED_workspace_change` with an *empty* Python backtrace, which
+  is the signature of this whole family: if nothing of ours is on the stack,
+  look for something we queued. It is done from the timer chain now, by name.
 - **Never delete a workspace from inside the running script.** Deleting one frees
   its screens and areas; the script runs inside `bpy.ops.text.run_script()`, and
   when that operator finishes Blender builds its redo panel for the area it ran
